@@ -12,13 +12,13 @@
 
 <p align="center">
 
-  <h2 align="center">
+  <h3 align="center">
     <a href="#----------------">
-      <img src="img/logo.png" alt="Logo" width="200" height="200">
+      <img src="img/logo.png" alt="Logo" width="150" height="150">
     </a>
-  </h2>
+  </h3>
 
-  <h2 align="center">blockkey</h2>
+  <h3 align="center">blockkey</h3>
 
   <p align="center">
     Enter a new era of software licensing.
