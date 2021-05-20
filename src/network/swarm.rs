@@ -1,17 +1,16 @@
-use super::CustomEvent;
+use super::InternalEvent;
 use libp2p::{
     core::{muxing, transport, upgrade},
     dns::TokioDnsConfig,
     gossipsub::{
-        self, Gossipsub, GossipsubEvent, GossipsubMessage, IdentTopic as GossipTopic,
-        MessageAuthenticity, MessageId, ValidationMode,
+        self, Gossipsub, GossipsubMessage, MessageAuthenticity, MessageId, ValidationMode,
     },
     identity,
-    mdns::{Mdns, MdnsEvent},
+    mdns::Mdns,
     mplex, noise,
-    swarm::{SwarmBuilder, SwarmEvent},
+    swarm::SwarmBuilder,
     tcp::TokioTcpConfig,
-    Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
+    NetworkBehaviour, PeerId, Swarm, Transport,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
@@ -20,15 +19,13 @@ use std::time::Duration;
 
 // Create a custom network behaviour that combines Gossipsub and mDNS.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "CustomEvent", event_process = false)]
+#[behaviour(out_event = "InternalEvent", event_process = false)]
 pub struct CustomBehaviour {
     pub gossipsub: Gossipsub,
     pub mdns: Mdns,
-    #[behaviour(ignore)]
-    pub topic: GossipTopic,
 }
 
-pub async fn create_transport(
+async fn create_transport(
     keys: &identity::Keypair,
 ) -> Result<transport::Boxed<(PeerId, muxing::StreamMuxerBox)>, Box<dyn Error>> {
     // Create a keypair for authenticated encryption of the transport.
@@ -53,9 +50,7 @@ pub async fn create_transport(
     Ok(configured)
 }
 
-pub async fn construct(topic: &str) -> Result<Swarm<CustomBehaviour>, Box<dyn Error>> {
-    let topic = GossipTopic::new(topic);
-
+pub async fn construct() -> Result<Swarm<CustomBehaviour>, Box<dyn Error>> {
     // Generate a random keypair and corresponding ID
     let local_keys = identity::Keypair::generate_ed25519();
     let peer_id = PeerId::from(local_keys.public());
@@ -89,13 +84,7 @@ pub async fn construct(topic: &str) -> Result<Swarm<CustomBehaviour>, Box<dyn Er
             gossipsub::Gossipsub::new(MessageAuthenticity::Signed(local_keys), gossipsub_config)
                 .expect("Correct configuration");
 
-        let mut behaviour = CustomBehaviour {
-            gossipsub,
-            mdns,
-            topic: topic.clone(),
-        };
-
-        behaviour.gossipsub.subscribe(&topic).unwrap();
+        let behaviour = CustomBehaviour { gossipsub, mdns };
 
         SwarmBuilder::new(transport, behaviour, peer_id)
             // Spawn background tasks onto the tokio runtime.
