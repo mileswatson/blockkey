@@ -1,15 +1,27 @@
+mod swarm;
+
+use self::swarm::InternalEvent;
 use libp2p::{
-    gossipsub::{error::PublishError, GossipsubEvent, IdentTopic as GossipTopic, MessageId},
-    mdns::MdnsEvent,
+    gossipsub::{error::PublishError, IdentTopic as GossipTopic, MessageId},
     swarm::SwarmEvent,
     Multiaddr, PeerId, Swarm,
 };
 use std::error::Error;
-mod swarm;
 
 pub struct Network {
     swarm: Swarm<swarm::CustomBehaviour>,
     topic: GossipTopic,
+}
+
+pub struct Message {
+    pub peer: PeerId,
+    pub id: MessageId,
+    pub data: Vec<u8>,
+}
+
+pub enum NetworkEvent {
+    ListeningOn(Multiaddr),
+    Received(Message),
 }
 
 impl Network {
@@ -18,7 +30,13 @@ impl Network {
             match self.swarm.next_event().await {
                 SwarmEvent::NewListenAddr(addr) => return NetworkEvent::ListeningOn(addr),
                 SwarmEvent::Behaviour(internal_event) => match internal_event {
-                    InternalEvent::NetworkEvent(e) => return e,
+                    InternalEvent::Received { peer, id, message } => {
+                        return NetworkEvent::Received(Message {
+                            peer,
+                            id,
+                            data: message.data,
+                        })
+                    }
                     InternalEvent::Found(peers) => {
                         for peer in peers {
                             self.swarm
@@ -50,55 +68,6 @@ impl Network {
             .behaviour_mut()
             .gossipsub
             .publish(self.topic.clone(), message)
-    }
-}
-
-#[derive(Debug)]
-pub struct Message {
-    pub peer: PeerId,
-    pub id: MessageId,
-    pub data: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub enum NetworkEvent {
-    ListeningOn(Multiaddr),
-    Received(Message),
-}
-
-pub enum InternalEvent {
-    NetworkEvent(NetworkEvent),
-    Found(Vec<PeerId>),
-    Lost(Vec<PeerId>),
-    Other,
-}
-
-impl From<GossipsubEvent> for InternalEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        match event {
-            GossipsubEvent::Message {
-                propagation_source: peer,
-                message_id: id,
-                message,
-            } => InternalEvent::NetworkEvent(NetworkEvent::Received(Message {
-                peer,
-                id,
-                data: message.data,
-            })),
-
-            _ => InternalEvent::Other,
-        }
-    }
-}
-
-impl From<MdnsEvent> for InternalEvent {
-    fn from(event: MdnsEvent) -> Self {
-        match event {
-            MdnsEvent::Discovered(list) => {
-                InternalEvent::Found(list.map(|(peer, _)| peer).collect())
-            }
-            MdnsEvent::Expired(list) => InternalEvent::Lost(list.map(|(peer, _)| peer).collect()),
-        }
     }
 }
 

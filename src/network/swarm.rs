@@ -1,12 +1,12 @@
-use super::InternalEvent;
 use libp2p::{
     core::{muxing, transport, upgrade},
     dns::TokioDnsConfig,
     gossipsub::{
-        self, Gossipsub, GossipsubMessage, MessageAuthenticity, MessageId, ValidationMode,
+        self, Gossipsub, GossipsubEvent, GossipsubMessage, MessageAuthenticity, MessageId,
+        ValidationMode,
     },
     identity,
-    mdns::Mdns,
+    mdns::{Mdns, MdnsEvent},
     mplex, noise,
     swarm::SwarmBuilder,
     tcp::TokioTcpConfig,
@@ -16,6 +16,41 @@ use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
+
+pub enum InternalEvent {
+    Received {
+        peer: PeerId,
+        id: MessageId,
+        message: GossipsubMessage,
+    },
+    Found(Vec<PeerId>),
+    Lost(Vec<PeerId>),
+    Other,
+}
+
+impl From<GossipsubEvent> for InternalEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        match event {
+            GossipsubEvent::Message {
+                propagation_source: peer,
+                message_id: id,
+                message,
+            } => InternalEvent::Received { peer, id, message },
+            _ => InternalEvent::Other,
+        }
+    }
+}
+
+impl From<MdnsEvent> for InternalEvent {
+    fn from(event: MdnsEvent) -> Self {
+        match event {
+            MdnsEvent::Discovered(list) => {
+                InternalEvent::Found(list.map(|(peer, _)| peer).collect())
+            }
+            MdnsEvent::Expired(list) => InternalEvent::Lost(list.map(|(peer, _)| peer).collect()),
+        }
+    }
+}
 
 // Create a custom network behaviour that combines Gossipsub and mDNS.
 #[derive(NetworkBehaviour)]

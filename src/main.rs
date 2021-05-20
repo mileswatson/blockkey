@@ -20,7 +20,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     use NetworkEvent::*;
                     match event {
                         ListeningOn(addr) => println!("Listening on {}", addr),
-                        Received(message) => println!("Received {:?} with id {} from {}", String::from_utf8_lossy(&message.data), message.id, message.peer),
+                        Received(message) => {
+                            let data = String::from_utf8_lossy(&message.data);
+                            println!("Received {:?} with id {} from {}", data, message.id, message.peer);
+                            //net.broadcast((data + "reply").as_bytes()).await.ok();
+                        }
                     }
                     None
                 }
