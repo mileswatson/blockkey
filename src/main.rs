@@ -1,11 +1,11 @@
 use std::error::Error;
 
-mod swarm;
+mod network;
 
 struct Printer {}
 
-impl swarm::Handler for Printer {
-    fn receive(&mut self, message: swarm::Message) {
+impl network::Handler for Printer {
+    fn receive(&mut self, message: network::Message) {
         println!(
             "Got message: {} with id: {} from peer: {:?}",
             String::from_utf8_lossy(&message.data),
@@ -18,8 +18,6 @@ impl swarm::Handler for Printer {
 /// Set up the tokio runtime.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut swarm = swarm::construct("chatter").await?;
-    swarm::run(&mut swarm, &mut Printer {}).await?;
-
+    network::run("chatter", &mut Printer {}).await?;
     Ok(())
 }
