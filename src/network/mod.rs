@@ -5,12 +5,7 @@ use libp2p::{
     Multiaddr, PeerId, Swarm,
 };
 use std::error::Error;
-
 mod swarm;
-
-pub trait Handler: Sync {
-    fn receive(&mut self, message: Message);
-}
 
 pub struct Network {
     swarm: Swarm<swarm::CustomBehaviour>,
