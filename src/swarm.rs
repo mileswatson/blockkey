@@ -1,5 +1,6 @@
 use libp2p::{
-    core::upgrade,
+    core::{muxing, transport, upgrade},
+    dns::TokioDnsConfig,
     gossipsub::{
         self, Gossipsub, GossipsubEvent, GossipsubMessage, IdentTopic as GossipTopic,
         MessageAuthenticity, MessageId, ValidationMode,
@@ -57,18 +58,8 @@ impl From<GossipsubEvent> for CustomEvent {
 impl From<MdnsEvent> for CustomEvent {
     fn from(event: MdnsEvent) -> Self {
         match event {
-            MdnsEvent::Discovered(list) => {
-                CustomEvent::Found(list.map(|(peer, _)| peer).collect())
-                //for (peer, _) in list {
-                //    self.gossipsub.add_explicit_peer(&peer);
-                //}
-            }
-            MdnsEvent::Expired(list) => {
-                CustomEvent::Lost(list.map(|(peer, _)| peer).collect())
-                //for (peer, _) in list {
-                //    self.gossipsub.remove_explicit_peer(&peer);
-                //}
-            }
+            MdnsEvent::Discovered(list) => CustomEvent::Found(list.map(|(peer, _)| peer).collect()),
+            MdnsEvent::Expired(list) => CustomEvent::Lost(list.map(|(peer, _)| peer).collect()),
         }
     }
 }
@@ -83,6 +74,31 @@ pub struct CustomBehaviour {
     topic: GossipTopic,
 }
 
+async fn create_transport(
+    keys: &identity::Keypair,
+) -> Result<transport::Boxed<(PeerId, muxing::StreamMuxerBox)>, Box<dyn Error>> {
+    // Create a keypair for authenticated encryption of the transport.
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&keys)
+        .expect("Signing libp2p-noise static DH keypair failed.");
+
+    // Base tcp transport
+    let tcp = TokioTcpConfig::new().nodelay(true);
+
+    // Add DNS resolver
+    let dns_tcp = TokioDnsConfig::system(tcp)?;
+
+    // Upgrade and configure
+    let configured = dns_tcp
+        .upgrade(upgrade::Version::V1)
+        .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+        .multiplex(mplex::MplexConfig::new())
+        .timeout(std::time::Duration::from_secs(20))
+        .boxed();
+
+    Ok(configured)
+}
+
 pub async fn construct(topic: &str) -> Result<Swarm<CustomBehaviour>, Box<dyn Error>> {
     let topic = GossipTopic::new(topic);
 
@@ -91,19 +107,9 @@ pub async fn construct(topic: &str) -> Result<Swarm<CustomBehaviour>, Box<dyn Er
     let peer_id = PeerId::from(local_keys.public());
     println!("Local peer id: {:?}", peer_id);
 
-    // Create a keypair for authenticated encryption of the transport.
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-        .into_authentic(&local_keys)
-        .expect("Signing libp2p-noise static DH keypair failed.");
-
     // Create a tokio-based TCP transport use noise for authenticated
     // encryption and Mplex for multiplexing of substreams on a TCP stream.
-    let transport = TokioTcpConfig::new()
-        .nodelay(true)
-        .upgrade(upgrade::Version::V1)
-        .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-        .multiplex(mplex::MplexConfig::new())
-        .boxed();
+    let transport = create_transport(&local_keys).await?;
 
     // Create a Swarm to manage peers and events.
     let swarm = {
