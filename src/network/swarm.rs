@@ -8,6 +8,7 @@ use libp2p::{
     identity,
     mdns::{Mdns, MdnsEvent},
     mplex, noise,
+    ping::{Ping, PingConfig, PingEvent},
     swarm::SwarmBuilder,
     tcp::TokioTcpConfig,
     NetworkBehaviour, PeerId, Swarm, Transport,
@@ -52,12 +53,19 @@ impl From<MdnsEvent> for InternalEvent {
     }
 }
 
+impl From<PingEvent> for InternalEvent {
+    fn from(_: PingEvent) -> Self {
+        InternalEvent::Other
+    }
+}
+
 // Create a custom network behaviour that combines Gossipsub and mDNS.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "InternalEvent", event_process = false)]
 pub struct CustomBehaviour {
     pub gossipsub: Gossipsub,
     pub mdns: Mdns,
+    pub ping: Ping,
 }
 
 async fn create_transport(
@@ -79,7 +87,6 @@ async fn create_transport(
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
-        .timeout(std::time::Duration::from_secs(20))
         .boxed();
 
     Ok(configured)
@@ -119,7 +126,13 @@ pub async fn construct() -> Result<Swarm<CustomBehaviour>, Box<dyn Error>> {
             gossipsub::Gossipsub::new(MessageAuthenticity::Signed(local_keys), gossipsub_config)
                 .expect("Correct configuration");
 
-        let behaviour = CustomBehaviour { gossipsub, mdns };
+        let ping = Ping::new(PingConfig::new().with_keep_alive(true));
+
+        let behaviour = CustomBehaviour {
+            gossipsub,
+            mdns,
+            ping,
+        };
 
         SwarmBuilder::new(transport, behaviour, peer_id)
             // Spawn background tasks onto the tokio runtime.
