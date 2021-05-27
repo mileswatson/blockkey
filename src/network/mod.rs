@@ -13,6 +13,7 @@ pub struct Network {
     topic: GossipTopic,
 }
 
+#[derive(Debug)]
 pub struct Message {
     pub peer: PeerId,
     pub id: MessageId,
@@ -27,9 +28,10 @@ pub enum NetworkEvent {
 impl Network {
     pub async fn next_event(&mut self) -> NetworkEvent {
         loop {
+            use SwarmEvent::*;
             match self.swarm.next_event().await {
-                SwarmEvent::NewListenAddr(addr) => return NetworkEvent::ListeningOn(addr),
-                SwarmEvent::Behaviour(internal_event) => match internal_event {
+                NewListenAddr(addr) => return NetworkEvent::ListeningOn(addr),
+                Behaviour(internal_event) => match internal_event {
                     InternalEvent::Received { peer, id, message } => {
                         return NetworkEvent::Received(Message {
                             peer,
