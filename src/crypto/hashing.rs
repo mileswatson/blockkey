@@ -61,8 +61,8 @@ pub fn build_merkle_tree<H: Hashable>(leaves: &[H]) -> MerkleTree {
                 let value = Hash::concat(&left.value, &right.value);
                 current_layer.push(MerkleNode {
                     value,
-                    left: Some(Box::new(left.clone())),
-                    right: Some(Box::new(right.clone())),
+                    left: Some(Box::new(left)),
+                    right: Some(Box::new(right)),
                 });
             } else {
                 current_layer.push(prev_layer.pop().unwrap());
