@@ -363,8 +363,10 @@ dependencies = [
 name = "blockkey"
 version = "0.1.0"
 dependencies = [
+ "data-encoding",
  "futures",
  "libp2p",
+ "sha2 0.9.5",
  "tokio",
 ]
 
