@@ -1,5 +1,5 @@
 [package]
-name = "blockkey-prototype"
+name = "blockkey"
 version = "0.1.0"
 authors = ["Miles Watson <contact@mileswatson.net>"]
 edition = "2018"

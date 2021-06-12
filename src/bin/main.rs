@@ -2,8 +2,7 @@ use std::error::Error;
 use std::sync::mpsc::{channel, SendError};
 use tokio::io::{self, AsyncBufReadExt};
 
-mod network;
-use network::NetworkEvent;
+use blockkey::network;
 
 /// Set up the tokio runtime.
 #[tokio::main]
@@ -34,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let to_publish = {
             tokio::select! {
                 event = net.next_event() => {
-                    use NetworkEvent::*;
+                    use network::NetworkEvent::*;
                     match event {
                         ListeningOn(addr) => println!("Listening on {}", addr),
                         Received(message) => {

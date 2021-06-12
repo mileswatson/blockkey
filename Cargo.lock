@@ -360,7 +360,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "blockkey-prototype"
+name = "blockkey"
 version = "0.1.0"
 dependencies = [
  "futures",
