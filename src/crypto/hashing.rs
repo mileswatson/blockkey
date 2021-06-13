@@ -54,8 +54,8 @@ pub trait Hashable {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MerkleNode {
     pub value: Hash,
-    pub left: i32,
-    pub right: i32,
+    pub left: Option<usize>,
+    pub right: Option<usize>,
     pub size: usize,
 }
 
@@ -65,8 +65,8 @@ impl MerkleNode {
         let value = tree[left].value + tree[right].value + size.hash();
         MerkleNode {
             value,
-            left: left as i32,
-            right: right as i32,
+            left: Some(left),
+            right: Some(right),
             size,
         }
     }
@@ -75,10 +75,10 @@ impl MerkleNode {
 
 
 // Definition of Merkle Tree
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct MerkleTree {
     pub tree: Vec::<MerkleNode>,
-    pub root: i32,
+    pub root: Option<usize>,
     pub size: usize, // Number of leaves
 }
 
@@ -88,7 +88,7 @@ impl MerkleTree {
         if leaves.is_empty() {
             return MerkleTree {
                 tree: Vec::<MerkleNode>::new(),
-                root: -1,
+                root: None,
                 size: 0,
             };
         }
@@ -101,8 +101,8 @@ impl MerkleTree {
         for (index, leaf_value) in leaves.iter().enumerate() {
             tree.push(MerkleNode {
                 value: leaf_value.hash(),
-                left: -1,
-                right: -1,
+                left: None,
+                right: None,
                 size: 1,
             });
             prev_layer.push(index as usize);
@@ -125,11 +125,27 @@ impl MerkleTree {
         
         MerkleTree {
             tree, 
-            root: prev_layer[0] as i32,
+            root: Some(prev_layer[0]),
             size: leaves.len(),
         }
     }
+
+    pub fn get_root_hash(&self) -> Option<Hash> {
+        match self.root {
+            Some(index) => Some(self.tree[index].value.clone()),
+            None => None
+        }
+    }
 }
+
+impl PartialEq for MerkleTree {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.get_root_hash() == rhs.get_root_hash() &&
+        self.size == rhs.size
+    }
+}
+
+impl Eq for MerkleTree {}
 // End of merkle tree
 
 // impl Hashable trait for integers, floats, boolean, char, and string
