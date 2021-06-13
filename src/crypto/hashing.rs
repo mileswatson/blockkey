@@ -53,10 +53,10 @@ pub trait Hashable {
 // Definition of Merkle Tree Node
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MerkleNode {
-    value: Hash,
-    left: i32,
-    right: i32,
-    size: usize,
+    pub value: Hash,
+    pub left: i32,
+    pub right: i32,
+    pub size: usize,
 }
 
 impl MerkleNode {
@@ -77,9 +77,9 @@ impl MerkleNode {
 // Definition of Merkle Tree
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MerkleTree {
-    tree: Vec::<MerkleNode>,
-    root: i32,
-    size: usize, // Number of leaves
+    pub tree: Vec::<MerkleNode>,
+    pub root: i32,
+    pub size: usize, // Number of leaves
 }
 
 impl MerkleTree {
