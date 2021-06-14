@@ -1,11 +1,8 @@
-
 use data_encoding::HEXUPPER;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::convert::TryInto;
-use std::ops;
 use std::fmt;
 
-// Definition of Hash struct
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hash([u8; 32]);
 
@@ -17,15 +14,6 @@ impl Hash {
         let result = hasher.finalize();
         Hash(result.as_slice().try_into().unwrap())
     }
-
-    // Method that takes two Hash and return the Hash of their concatenation
-    pub fn concat(lhs: &Hash, rhs: &Hash) -> Hash {
-        let mut result = Vec::new();
-        result.extend_from_slice(&lhs.0);
-        result.extend_from_slice(&rhs.0);
-        let result_slice: &[u8] = &result;
-        Hash::from_bytes(&result_slice)
-    }
 }
 
 impl fmt::Display for Hash {
@@ -34,23 +22,49 @@ impl fmt::Display for Hash {
     }
 }
 
-// Basically Hash::concat
-impl ops::Add for Hash {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self {
-        Hash::concat(&self, &rhs)
-    }    
-}
-
-// End of Hash 
-
-// Definition of Hashable
 pub trait Hashable {
     fn hash(&self) -> Hash;
 }
-// End of hashable
 
-// Definition of Merkle Tree Node
+impl Hashable for Hash {
+    fn hash(&self) -> Hash {
+        *self
+    }
+}
+
+macro_rules! _append_hashes {
+    ($x:expr, $y:expr) => {
+        $x.extend_from_slice(&$y.hash().0);
+    };
+
+    ($x:expr, $y:expr, $($z:expr),+) => {
+        $x.extend_from_slice(&$y.hash().0);
+        _append_hashes!($x, $($z),+);
+    };
+}
+
+#[macro_export]
+macro_rules! hash {
+    [$x:expr] => ( x.hash() );
+    [$($y:expr),*] => (
+        {
+            let mut v = vec![];
+            _append_hashes!(&mut v, $($y),*);
+            println!("{:?}", v);
+            Hash::from_bytes(v.as_slice())
+        }
+    );
+}
+
+#[cfg(test)]
+mod test {
+    use crate::crypto::hashing::{Hash, Hashable};
+    #[test]
+    fn try_hash() {
+        assert_ne!(hash![1, 2, 3], hash![1, hash![2, 3]]);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MerkleNode {
     pub value: Hash,
@@ -60,9 +74,9 @@ pub struct MerkleNode {
 }
 
 impl MerkleNode {
-    pub fn merge(tree: &Vec::<MerkleNode>, left: usize, right: usize) -> MerkleNode {
+    pub fn merge(tree: &[MerkleNode], left: usize, right: usize) -> MerkleNode {
         let size = tree[left].size + tree[right].size;
-        let value = tree[left].value + tree[right].value + size.hash();
+        let value = hash![tree[left].value, tree[right].value, size.hash()];
         MerkleNode {
             value,
             left: Some(left),
@@ -71,20 +85,17 @@ impl MerkleNode {
         }
     }
 }
-// End of Merkle Tree Node
 
-
-// Definition of Merkle Tree
 #[derive(Debug, Clone)]
 pub struct MerkleTree {
-    pub tree: Vec::<MerkleNode>,
+    pub tree: Vec<MerkleNode>,
     pub root: Option<usize>,
     pub size: usize, // Number of leaves
 }
 
 impl MerkleTree {
     pub fn new<H: Hashable>(leaves: &[H]) -> MerkleTree {
-        // Return empty tree if there is no leave
+        // Return empty tree if there is no leaf
         if leaves.is_empty() {
             return MerkleTree {
                 tree: Vec::<MerkleNode>::new(),
@@ -94,10 +105,8 @@ impl MerkleTree {
         }
 
         let mut tree = Vec::<MerkleNode>::new();
-    
         let mut prev_layer = Vec::<usize>::new();
         let mut current_layer = Vec::<usize>::new();
-    
         for (index, leaf_value) in leaves.iter().enumerate() {
             tree.push(MerkleNode {
                 value: leaf_value.hash(),
@@ -107,14 +116,13 @@ impl MerkleTree {
             });
             prev_layer.push(index as usize);
         }
-    
         while prev_layer.len() != 1 {
             while !prev_layer.is_empty() {
                 if prev_layer.len() > 1 {
                     let left = prev_layer.pop().unwrap();
                     let right = prev_layer.pop().unwrap();
                     tree.push(MerkleNode::merge(&tree, left, right));
-                    current_layer.push(tree.len()-1);
+                    current_layer.push(tree.len() - 1);
                 } else {
                     current_layer.push(prev_layer.pop().unwrap());
                 }
@@ -122,33 +130,26 @@ impl MerkleTree {
             std::mem::swap(&mut prev_layer, &mut current_layer);
             current_layer.clear();
         }
-        
         MerkleTree {
-            tree, 
+            tree,
             root: Some(prev_layer[0]),
             size: leaves.len(),
         }
     }
 
     pub fn get_root_hash(&self) -> Option<Hash> {
-        match self.root {
-            Some(index) => Some(self.tree[index].value.clone()),
-            None => None
-        }
+        self.root.map(|index| self.tree[index].value)
     }
 }
 
 impl PartialEq for MerkleTree {
     fn eq(&self, rhs: &Self) -> bool {
-        self.get_root_hash() == rhs.get_root_hash() &&
-        self.size == rhs.size
+        self.get_root_hash() == rhs.get_root_hash() && self.size == rhs.size
     }
 }
 
 impl Eq for MerkleTree {}
-// End of merkle tree
 
-// impl Hashable trait for integers, floats, boolean, char, and string
 impl Hashable for i8 {
     fn hash(&self) -> Hash {
         Hash::from_bytes(&self.to_be_bytes())
@@ -225,7 +226,7 @@ impl Hashable for f32 {
     fn hash(&self) -> Hash {
         Hash::from_bytes(&self.to_be_bytes())
     }
-} 
+}
 
 impl Hashable for f64 {
     fn hash(&self) -> Hash {
@@ -248,7 +249,7 @@ impl Hashable for bool {
     }
 }
 
-impl Hashable for String  {
+impl Hashable for String {
     fn hash(&self) -> Hash {
         Hash::from_bytes(self.as_bytes())
     }
