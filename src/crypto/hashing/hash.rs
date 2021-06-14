@@ -7,6 +7,10 @@ use std::fmt;
 pub struct Hash([u8; 32]);
 
 impl Hash {
+    pub fn empty() -> Hash {
+        Hash::from_bytes(&[])
+    }
+
     // Method that takes a byte array and return hash
     pub fn from_bytes(msg: &[u8]) -> Hash {
         let mut hasher = Sha256::new();
