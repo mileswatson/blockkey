@@ -141,23 +141,20 @@ impl Hashable for String {
     }
 }
 
-macro_rules! _append_hashes {
-    ($x:expr, $y:expr) => {
-        $x.extend_from_slice(&$y.hash().to_bytes());
-    };
-
-    ($x:expr, $y:expr, $($z:expr),+) => {
-        $x.extend_from_slice(&$y.hash().to_bytes());
-        _append_hashes!($x, $($z),+);
-    };
-}
-
 macro_rules! hash {
+    (impl $x:expr, $y:expr) => {
+        $x.extend_from_slice(&$y.hash().to_bytes());
+    };
+
+    (impl $x:expr, $y:expr, $($z:expr),+) => {
+        $x.extend_from_slice(&$y.hash().to_bytes());
+        hash!(impl $x, $($z),+);
+    };
     [$x:expr] => ( x.hash() );
-    [$($y:expr),*] => (
+    [$($y:expr),+] => (
         {
             let mut v = vec![];
-            _append_hashes!(&mut v, $($y),*);
+            hash!(impl &mut v, $($y),*);
             println!("{:?}", v);
             super::Hash::from_bytes(v.as_slice())
         }
@@ -166,9 +163,14 @@ macro_rules! hash {
 
 #[cfg(test)]
 mod test {
+    use crate::crypto::hashing::*;
     #[test]
-    fn try_hash() {
-        use crate::crypto::hashing::*;
+    fn hash_transparency() {
+        assert_eq!(hash![1, 2, 3], hash![1, 2.hash(), 3]);
+    }
+
+    #[test]
+    fn nested_hashing() {
         assert_ne!(hash![1, 2, 3], hash![1, hash![2, 3]]);
     }
 }
