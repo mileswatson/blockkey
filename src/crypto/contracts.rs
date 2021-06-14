@@ -1,3 +1,4 @@
+use crate::crypto::hashing::Hashable;
 use libp2p::identity;
 
 // Definition of PublicKey
@@ -19,7 +20,7 @@ pub struct Signature {
 }
 
 impl Signature {
-    pub fn verify_bytes(&self, msg: &[u8]) -> bool {
+    fn verify_bytes(&self, msg: &[u8]) -> bool {
         self.signee.verify_bytes(msg, &self.signature)
     }
 }
@@ -43,7 +44,7 @@ impl PrivateKey {
         }
     }
 
-    pub fn sign_bytes(&self, msg: &[u8]) -> Signature {
+    fn sign_bytes(&self, msg: &[u8]) -> Signature {
         let signature = self.keypair.sign(msg).expect("Failed to sign bytes");
 
         Signature {
@@ -55,9 +56,24 @@ impl PrivateKey {
 // End of PrivateKey
 
 // Definition of Contract
-pub trait Contract {
-    fn sign(&self, private: PrivateKey) -> Signature;
-    fn verify(&self, signature: Signature) -> bool;
+pub struct Contract<T: Hashable> {
+    signature: Signature,
+    contract: T,
+}
+
+impl<T: Hashable> Contract<T> {
+    pub fn sign(contract: T, private_key: PrivateKey) -> Self {
+        let hash = contract.hash();
+        Contract {
+            signature: private_key.sign_bytes(&hash.0),
+            contract
+        }
+    }
+
+    pub fn verify(&self) -> bool {
+        let hash = self.contract.hash();
+        self.signature.verify_bytes(&hash.0)
+    }
 }
 // End of Contract
 

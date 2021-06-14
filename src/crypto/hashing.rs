@@ -4,11 +4,10 @@ use sha2::{Sha256, Digest};
 use std::convert::TryInto;
 use std::ops;
 use std::fmt;
-use super::contracts::{Contract, PrivateKey, Signature};
 
 // Definition of Hash struct
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Hash([u8; 32]);
+pub struct Hash(pub [u8; 32]);
 
 impl Hash {
     // Method that takes a byte array and return hash
@@ -41,15 +40,6 @@ impl ops::Add for Hash {
     fn add(self, rhs: Self) -> Self {
         Hash::concat(&self, &rhs)
     }    
-}
-
-impl Contract for Hash {
-    fn sign(&self, private: PrivateKey) -> Signature {
-        private.sign_bytes(&self.0)
-    }
-    fn verify(&self, signature: Signature) -> bool {
-        signature.verify_bytes(&self.0)
-    }
 }
 
 // End of Hash 
@@ -262,15 +252,5 @@ impl Hashable for String  {
     fn hash(&self) -> Hash {
         Hash::from_bytes(self.as_bytes())
     }
-}
-
-impl<T: Hashable> Contract for T {
-    fn sign(&self, private: PrivateKey) -> Signature {
-        self.hash().sign(private)
-    }
-    fn verify(&self, signature: Signature) -> bool {
-        self.hash().verify(signature)
-    }
-
 }
 
