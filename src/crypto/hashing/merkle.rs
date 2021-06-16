@@ -1,10 +1,9 @@
 use super::*;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 struct MerkleNode {
     value: Hash,
-    left: Option<usize>,
-    right: Option<usize>,
+    children: Option<(usize, usize)>,
     size: usize,
 }
 
@@ -12,8 +11,7 @@ impl MerkleNode {
     pub fn new(x: &impl Hashable) -> MerkleNode {
         MerkleNode {
             value: x.hash(),
-            left: None,
-            right: None,
+            children: None,
             size: 1,
         }
     }
@@ -21,8 +19,7 @@ impl MerkleNode {
     pub fn empty() -> MerkleNode {
         MerkleNode {
             value: Hash::empty(),
-            left: None,
-            right: None,
+            children: None,
             size: 0,
         }
     }
@@ -31,8 +28,7 @@ impl MerkleNode {
         let size = tree[left].size + tree[right].size;
         MerkleNode {
             value: hash![tree[left], tree[right], size],
-            left: Some(left),
-            right: Some(right),
+            children: Some((left, right)),
             size,
         }
     }
@@ -108,11 +104,11 @@ mod test {
     use super::*;
     #[test]
     fn test() {
-        println!("{:?}\n", MerkleTree::new(&Vec::<u8>::new()));
-        println!("{:?}\n", MerkleTree::new::<u8>(&[1]));
-        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2]));
-        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3]));
-        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3, 4]));
-        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3, 4, 5]));
+        MerkleTree::new(&Vec::<u8>::new());
+        MerkleTree::new::<u8>(&[1]);
+        MerkleTree::new::<u8>(&[1, 2]);
+        MerkleTree::new::<u8>(&[1, 2, 3]);
+        MerkleTree::new::<u8>(&[1, 2, 3, 4]);
+        MerkleTree::new::<u8>(&[1, 2, 3, 4, 5]);
     }
 }
