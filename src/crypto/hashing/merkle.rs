@@ -57,29 +57,36 @@ impl MerkleTree {
                 leaves: 0,
             };
         }
+        // Create a MerkleNode for each leaf
         let mut nodes: Vec<MerkleNode> = leaves.iter().map(|leaf| MerkleNode::new(leaf)).collect();
-        let mut prev_layer: Vec<usize> = (0..nodes.len()).collect();
-        let mut current_layer = Vec::<usize>::new();
 
-        while prev_layer.len() != 1 {
-            for i in (0..prev_layer.len()).step_by(2) {
-                let left = prev_layer[i];
-                match prev_layer.get(i + 1).copied() {
-                    Some(right) => {
-                        nodes.push(MerkleNode::merge(&nodes, left, right));
-                        current_layer.push(nodes.len() - 1);
-                    }
-                    None => {
-                        current_layer.push(left);
-                    }
-                }
-            }
-            prev_layer.clear();
+        // Reference the indices of the leaves
+        let mut current_layer: Vec<usize> = (0..nodes.len()).collect();
+
+        // For keeping track of the previous layer
+        let mut prev_layer = Vec::<usize>::new();
+
+        while current_layer.len() != 1 {
+            // prev_layer = current_layer, but reduces allocations
             std::mem::swap(&mut prev_layer, &mut current_layer);
+            current_layer.clear();
+
+            // Iterate through and merge all pairs from the previous layer
+            for i in (0..prev_layer.len() - 1).step_by(2) {
+                let left = prev_layer[i];
+                let right = prev_layer[i + 1];
+
+                nodes.push(MerkleNode::merge(&nodes, left, right));
+                current_layer.push(nodes.len() - 1);
+            }
+            // If there's one node left over, add it to the end
+            if prev_layer.len() % 2 == 1 {
+                current_layer.push(prev_layer.len() - 1);
+            }
         }
         MerkleTree {
             nodes,
-            root: prev_layer[0],
+            root: current_layer[0],
             leaves: leaves.len(),
         }
     }
