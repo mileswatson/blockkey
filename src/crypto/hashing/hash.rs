@@ -145,6 +145,7 @@ impl Hashable for String {
     }
 }
 
+#[allow(unused_macros)]
 macro_rules! hash {
     (impl $x:expr, $y:expr) => {
         $x.extend_from_slice(&$y.hash().to_bytes());
@@ -159,7 +160,6 @@ macro_rules! hash {
         {
             let mut v = vec![];
             hash!(impl &mut v, $($y),*);
-            println!("{:?}", v);
             super::Hash::from_bytes(v.as_slice())
         }
     );

@@ -52,7 +52,7 @@ pub struct MerkleTree {
 }
 
 impl MerkleTree {
-    pub fn new(leaves: &[impl Hashable]) -> MerkleTree {
+    pub fn new<H: Hashable>(leaves: &[H]) -> MerkleTree {
         // Return empty tree if there is no leaf
         if leaves.is_empty() {
             return MerkleTree {
@@ -99,3 +99,16 @@ impl PartialEq for MerkleTree {
 }
 
 impl Eq for MerkleTree {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test() {
+        MerkleTree::new::<u8>(&[1]);
+        MerkleTree::new::<u8>(&[1, 2]);
+        MerkleTree::new::<u8>(&[1, 2, 3]);
+        MerkleTree::new::<u8>(&[1, 2, 3, 4]);
+        MerkleTree::new::<u8>(&[1, 2, 3, 4, 5]);
+    }
+}
