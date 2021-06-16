@@ -1,7 +1,6 @@
 use crate::crypto::hashing::Hashable;
 use libp2p::identity;
 
-// Definition of PublicKey
 pub struct PublicKey {
     key: identity::PublicKey,
 }
@@ -11,22 +10,7 @@ impl PublicKey {
         self.key.verify(msg, sig)
     }
 }
-// End of PublicKey
 
-// Definition of Signature
-pub struct Signature {
-    signee: PublicKey,
-    signature: Vec<u8>,
-}
-
-impl Signature {
-    fn verify_bytes(&self, msg: &[u8]) -> bool {
-        self.signee.verify_bytes(msg, &self.signature)
-    }
-}
-// End of Signature
-
-// Definition of PrivateKey
 pub struct PrivateKey {
     keypair: identity::Keypair,
 }
@@ -44,61 +28,65 @@ impl PrivateKey {
         }
     }
 
-    fn sign_bytes(&self, msg: &[u8]) -> Signature {
-        let signature = self.keypair.sign(msg).expect("Failed to sign bytes");
-
-        Signature {
+    pub fn sign<T: Hashable>(&self, content: T) -> Contract<T> {
+        Contract {
             signee: self.get_public(),
-            signature,
+            signature: self.sign_bytes(&content.hash().0),
+            content,
         }
     }
-}
-// End of PrivateKey
 
-// Definition of Contract
+    fn sign_bytes(&self, msg: &[u8]) -> Vec<u8> {
+        self.keypair.sign(msg).expect("Failed to sign bytes")
+    }
+}
+
 pub struct Contract<T: Hashable> {
-    signature: Signature,
-    contract: T,
+    signee: PublicKey,
+    signature: Vec<u8>,
+    content: T,
 }
 
 impl<T: Hashable> Contract<T> {
-    pub fn sign(contract: T, private_key: PrivateKey) -> Self {
-        let hash = contract.hash();
-        Contract {
-            signature: private_key.sign_bytes(&hash.0),
-            contract
-        }
-    }
-
     pub fn verify(&self) -> bool {
-        let hash = self.contract.hash();
-        self.signature.verify_bytes(&hash.0)
+        let hash = self.content.hash();
+        self.signee.verify_bytes(&hash.0, &self.signature)
     }
 }
-// End of Contract
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_correct_signature() {
+    fn test_correct_contract() {
         let private = PrivateKey::generate();
-        let message = b"Hello world.";
+        let message = 123;
 
-        let signature = private.sign_bytes(message);
-        assert!(signature.verify_bytes(message));
+        let contract = private.sign(message);
+
+        assert!(contract.verify());
     }
 
     #[test]
-    fn test_incorrect_signature() {
-        let signer = PrivateKey::generate();
-        let false_public = PrivateKey::generate().get_public();
-        let message = b"Hello world.";
+    fn test_tampered_content() {
+        let private = PrivateKey::generate();
+        let message = 123;
+        let mut contract = private.sign(message);
 
-        let mut signature = signer.sign_bytes(message);
-        signature.signee = false_public;
-        assert!(!signature.verify_bytes(message));
+        contract.content = 321;
+
+        assert!(!contract.verify());
+    }
+
+    #[test]
+    fn test_tampered_signee() {
+        let private = PrivateKey::generate();
+        let message = 123;
+        let mut contract = private.sign(message);
+
+        contract.signee = PrivateKey::generate().get_public();
+
+        assert!(!contract.verify());
     }
 }
-
