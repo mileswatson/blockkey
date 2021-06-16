@@ -31,7 +31,7 @@ impl PrivateKey {
     pub fn sign<T: Hashable>(&self, content: T) -> Contract<T> {
         Contract {
             signee: self.get_public(),
-            signature: self.sign_bytes(&content.hash().0),
+            signature: self.sign_bytes(content.hash().get_bytes()),
             content,
         }
     }
@@ -50,7 +50,7 @@ pub struct Contract<T: Hashable> {
 impl<T: Hashable> Contract<T> {
     pub fn verify(&self) -> bool {
         let hash = self.content.hash();
-        self.signee.verify_bytes(&hash.0, &self.signature)
+        self.signee.verify_bytes(hash.get_bytes(), &self.signature)
     }
 }
 
