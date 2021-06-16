@@ -66,16 +66,19 @@ impl MerkleTree {
         let mut current_layer = Vec::<usize>::new();
 
         while prev_layer.len() != 1 {
-            while !prev_layer.is_empty() {
-                if prev_layer.len() > 1 {
-                    let left = prev_layer.pop().unwrap();
-                    let right = prev_layer.pop().unwrap();
-                    nodes.push(MerkleNode::merge(&nodes, left, right));
-                    current_layer.push(nodes.len() - 1);
-                } else {
-                    current_layer.push(prev_layer.pop().unwrap());
+            for i in (0..prev_layer.len()).step_by(2) {
+                let left = prev_layer[i];
+                match prev_layer.get(i + 1).copied() {
+                    Some(right) => {
+                        nodes.push(MerkleNode::merge(&nodes, left, right));
+                        current_layer.push(nodes.len() - 1);
+                    }
+                    None => {
+                        current_layer.push(left);
+                    }
                 }
             }
+            prev_layer.clear();
             std::mem::swap(&mut prev_layer, &mut current_layer);
         }
         MerkleTree {
@@ -105,10 +108,11 @@ mod test {
     use super::*;
     #[test]
     fn test() {
-        MerkleTree::new::<u8>(&[1]);
-        MerkleTree::new::<u8>(&[1, 2]);
-        MerkleTree::new::<u8>(&[1, 2, 3]);
-        MerkleTree::new::<u8>(&[1, 2, 3, 4]);
-        MerkleTree::new::<u8>(&[1, 2, 3, 4, 5]);
+        println!("{:?}\n", MerkleTree::new(&Vec::<u8>::new()));
+        println!("{:?}\n", MerkleTree::new::<u8>(&[1]));
+        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2]));
+        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3]));
+        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3, 4]));
+        println!("{:?}\n", MerkleTree::new::<u8>(&[1, 2, 3, 4, 5]));
     }
 }
