@@ -19,8 +19,8 @@ impl Hash {
         Hash(result.as_slice().try_into().unwrap())
     }
 
-    pub fn to_bytes(self) -> [u8; 32] {
-        self.0
+    pub fn get_bytes(&self) -> &[u8; 32] {
+        &self.0
     }
 }
 
@@ -148,14 +148,14 @@ impl Hashable for String {
 #[allow(unused_macros)]
 macro_rules! hash {
     (impl $x:expr, $y:expr) => {
-        $x.extend_from_slice(&$y.hash().to_bytes());
+        $x.extend_from_slice($y.hash().get_bytes());
     };
 
     (impl $x:expr, $y:expr, $($z:expr),+) => {
-        $x.extend_from_slice(&$y.hash().to_bytes());
+        $x.extend_from_slice($y.hash().get_bytes());
         hash!(impl $x, $($z),+);
     };
-    [$x:expr] => ( x.hash() );
+    [$x:expr] => ( $x.hash() );
     [$($y:expr),+] => (
         {
             let mut v = vec![];
