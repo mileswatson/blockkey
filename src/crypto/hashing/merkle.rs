@@ -192,7 +192,7 @@ mod test {
     #[test]
     fn child_size() {
         assert_eq!(left_child_size(0), 0);
-        assert_eq!(left_child_size(1), 1);
+        assert_eq!(left_child_size(1), 0);
         assert_eq!(left_child_size(2), 1);
         assert_eq!(left_child_size(3), 2);
         assert_eq!(left_child_size(4), 2);
