@@ -147,15 +147,15 @@ fn verify_proof_rec(index: usize, size: usize, leaf: Hash, proof: &[Hash]) -> Op
     }
 }
 
-/// Gets the size of the left child, given the size of a parent MerkleNode
-/// x & (!x + 1) returns the lowest significant bit of x
-/// for signed integers, use x & -x as rust guarantees two's complement
-/// left_child_size(size) = 2 to the power most sigificant bit of size - 1
+/// Gets the size of the left child, given the size of a parent MerkleNode.
 fn left_child_size(size: usize) -> usize {
     match size {
         0 => 0,
         1 => 0,
         _ => {
+            // x & (!x + 1) returns the lowest significant bit of x.
+            // for signed integers, use x & -x as rust guarantees two's complement
+            // left_child_size(size) = 2 to the power (most sigificant bit of size - 1)
             let x = (size - 1).reverse_bits();
             (x & (!x + 1)).reverse_bits()
         }
