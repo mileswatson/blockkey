@@ -41,7 +41,7 @@ impl PrivateKey {
             .unwrap()
             .as_millis();
         let mut bytes_to_sign = content.hash().get_bytes().to_vec();
-        bytes_to_sign.extend(timestamp.to_ne_bytes().iter());
+        bytes_to_sign.extend(timestamp.to_be_bytes().iter());
 
         Contract {
             signee: self.get_public(),
@@ -77,7 +77,7 @@ pub struct Contract<T: Hashable> {
 impl<T: Hashable> Contract<T> {
     pub fn verify(&self) -> bool {
         let mut bytes_to_sign = self.content.hash().get_bytes().to_vec();
-        bytes_to_sign.extend(self.timestamp.to_ne_bytes().iter());
+        bytes_to_sign.extend(self.timestamp.to_be_bytes().iter());
 
         self.signee.verify_bytes(&bytes_to_sign, &self.signature)
     }

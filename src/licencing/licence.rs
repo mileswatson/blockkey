@@ -17,11 +17,12 @@ impl Hashable for LicenceForging {
 struct LicenceTransfer {
     sender: Address,
     recipient: Address,
-    licence: Hash,
+    product_id: u64,
+    licence: u64,
 }
 
 impl Hashable for LicenceTransfer {
     fn hash(&self) -> Hash {
-        hash![self.sender, self.recipient, self.licence]
+        hash![self.sender, self.recipient, self.product_id, self.licence]
     }
 }
