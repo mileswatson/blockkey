@@ -2,14 +2,6 @@ use crate::crypto::hashing::{Hash, Hashable};
 use libp2p::identity;
 use std::time::SystemTime;
 
-pub struct Address(Hash);
-
-impl Hashable for Address {
-    fn hash(&self) -> Hash {
-        self.0.hash()
-    }
-}
-
 pub struct PublicKey {
     key: identity::PublicKey,
 }
@@ -18,15 +10,12 @@ impl PublicKey {
     fn verify_bytes(&self, msg: &[u8], sig: &[u8]) -> bool {
         self.key.verify(msg, sig)
     }
-
-    pub fn get_address(&self) -> Address {
-        Address(self.key.clone().into_protobuf_encoding().hash())
-    }
 }
 
 impl Hashable for PublicKey {
-    fn hash(&self) -> Hash {
-        self.get_address().hash()
+    type Input = Self;
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.key.clone().into_protobuf_encoding()).cast()
     }
 }
 
@@ -82,7 +71,8 @@ impl<T: Hashable> Contract<T> {
 }
 
 impl<T: Hashable> Hashable for Contract<T> {
-    fn hash(&self) -> Hash {
+    type Input = Self;
+    fn hash(&self) -> Hash<Contract<T>> {
         hash![self.signee, self.signature, self.timestamp, self.content]
     }
 }

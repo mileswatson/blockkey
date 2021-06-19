@@ -2,152 +2,99 @@ use data_encoding::HEXUPPER;
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 use std::fmt;
+use std::marker::PhantomData;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Hash([u8; 32]);
+#[derive(Debug, PartialEq, Eq)]
+pub struct Hash<T: ?Sized>([u8; 32], PhantomData<T>);
 
-impl Hash {
-    pub fn empty() -> Hash {
-        Hash::from_bytes(&[])
+impl<T: ?Sized> Clone for Hash<T> {
+    fn clone(&self) -> Self {
+        Hash(self.0, PhantomData)
     }
+}
 
-    // Method that takes a byte array and return hash
-    pub fn from_bytes(msg: &[u8]) -> Hash {
+impl<T: ?Sized> Copy for Hash<T> {}
+
+impl Hash<Vec<u8>> {
+    pub fn from_bytes(bytes: &[u8]) -> Hash<Vec<u8>> {
         let mut hasher = Sha256::new();
-        hasher.update(msg);
+        hasher.update(bytes);
         let result = hasher.finalize();
-        Hash(result.as_slice().try_into().unwrap())
+        Hash(result.as_slice().try_into().unwrap(), PhantomData)
+    }
+}
+
+impl<T> Hash<T> {
+    pub fn empty() -> Hash<T> {
+        Vec::<u8>::new().hash().cast()
     }
 
     pub fn get_bytes(&self) -> &[u8; 32] {
         &self.0
     }
+
+    pub fn cast<H>(&self) -> Hash<H> {
+        Hash(self.0, PhantomData)
+    }
 }
 
-impl fmt::Display for Hash {
+impl<T> fmt::Display for Hash<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", HEXUPPER.encode(&self.0))
     }
 }
 
 pub trait Hashable {
-    fn hash(&self) -> Hash;
+    type Input;
+    fn hash(&self) -> Hash<Self::Input>;
 }
 
-impl Hashable for Hash {
-    fn hash(&self) -> Hash {
+impl<T> Hashable for Hash<T> {
+    type Input = T;
+    fn hash(&self) -> Hash<T> {
         *self
     }
 }
 
-impl Hashable for i8 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for i16 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for i32 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for i64 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for i128 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for isize {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for u8 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for u16 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for u32 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for u64 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
-    }
-}
-
-impl Hashable for u128 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
+impl Hashable for Vec<u8> {
+    type Input = Self;
+    fn hash(&self) -> Hash<Vec<u8>> {
+        Hash::from_bytes(&self)
     }
 }
 
 impl Hashable for usize {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
+    type Input = Self;
+    fn hash(&self) -> Hash<usize> {
+        Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
-impl Hashable for f32 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
+impl Hashable for i32 {
+    type Input = Self;
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
-impl Hashable for f64 {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self.to_be_bytes())
+impl Hashable for u8 {
+    type Input = Self;
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
-impl Hashable for char {
-    fn hash(&self) -> Hash {
-        let mut bytes = [0; 2];
-        self.encode_utf8(&mut bytes);
-        Hash::from_bytes(&bytes)
+impl Hashable for u64 {
+    type Input = Self;
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
-// There is no to_be_bytes for bool, so it's kinda hacky
-impl Hashable for bool {
-    fn hash(&self) -> Hash {
-        (*self as i32).hash()
-    }
-}
-
-impl Hashable for String {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(self.as_bytes())
-    }
-}
-
-impl Hashable for Vec<u8> {
-    fn hash(&self) -> Hash {
-        Hash::from_bytes(&self)
+impl Hashable for u128 {
+    type Input = Self;
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
@@ -162,12 +109,12 @@ macro_rules! hash {
         $x.extend_from_slice($y.hash().get_bytes());
         hash!(impl $x, $($z),+);
     };
-    [$x:expr] => ( $x.hash() );
+    [$x:expr] => ( $x.hash().cast() );
     [$($y:expr),+] => (
         {
             let mut v = vec![];
             hash!(impl &mut v, $($y),*);
-            Hash::from_bytes(v.as_slice())
+            Hash::from_bytes(v.as_slice()).cast()
         }
     );
 }
@@ -177,11 +124,14 @@ mod test {
     use crate::crypto::hashing::*;
     #[test]
     fn hash_transparency() {
-        assert_eq!(hash![1, 2, 3], hash![1, 2.hash(), 3]);
+        let x: Hash<()> = hash![1, 2, 3];
+        assert_eq!(x, hash![1, 2.hash(), 3]);
     }
 
     #[test]
     fn nested_hashing() {
-        assert_ne!(hash![1, 2, 3], hash![1, hash![2, 3]]);
+        let x: Hash<()> = hash![1, 2, 3];
+        let y: Hash<()> = hash![2, 3];
+        assert_ne!(x, hash![1, y]);
     }
 }
