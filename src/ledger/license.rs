@@ -1,28 +1,17 @@
 use crate::crypto::contracts::Address;
 use crate::crypto::hashing::*;
-use crate::hash;
 
-struct LicenceForging {
-    forger: Address,
-    product_id: u64,
-    licence: u64,
+struct LicenseTemplate {
+    seed: u64,
 }
 
-impl Hashable for LicenceForging {
-    fn hash(&self) -> Hash {
-        hash![self.forger, self.product_id, self.licence]
-    }
+struct LicenseCreation {
+    template: Hash,
 }
 
 struct LicenceTransfer {
-    sender: Address,
+    license: Hash,
     recipient: Address,
     product_id: u64,
     licence: u64,
-}
-
-impl Hashable for LicenceTransfer {
-    fn hash(&self) -> Hash {
-        hash![self.sender, self.recipient, self.product_id, self.licence]
-    }
 }
