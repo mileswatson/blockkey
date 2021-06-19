@@ -1,6 +1,6 @@
 use crate::crypto::contracts::Address;
-use crate::hash;
 use crate::crypto::hashing::*;
+use crate::hash;
 
 struct LicenceForging {
     forger: Address,
