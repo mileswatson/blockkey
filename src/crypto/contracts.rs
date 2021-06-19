@@ -1,6 +1,14 @@
-use crate::crypto::hashing::{Hashable, Hash};
-use libp2p::{identity, PeerId};
+use crate::crypto::hashing::{Hash, Hashable};
+use libp2p::identity;
 use std::time::SystemTime;
+
+pub struct Address(Hash);
+
+impl Hashable for Address {
+    fn hash(&self) -> Hash {
+        self.0.hash()
+    }
+}
 
 pub struct PublicKey {
     key: identity::PublicKey,
@@ -12,9 +20,13 @@ impl PublicKey {
     }
 
     pub fn get_address(&self) -> Address {
-        Address {
-            address: PeerId::from(self.key.clone())
-        }
+        Address(self.key.clone().into_protobuf_encoding().hash())
+    }
+}
+
+impl Hashable for PublicKey {
+    fn hash(&self) -> Hash {
+        self.get_address().hash()
     }
 }
 
@@ -36,10 +48,7 @@ impl PrivateKey {
     }
 
     pub fn sign<T: Hashable>(&self, content: T) -> Contract<T> {
-        let timestamp = SystemTime::now()
-            .elapsed()
-            .unwrap()
-            .as_millis();
+        let timestamp = SystemTime::now().elapsed().unwrap().as_millis();
         let mut bytes_to_sign = content.hash().get_bytes().to_vec();
         bytes_to_sign.extend(timestamp.to_be_bytes().iter());
 
@@ -53,17 +62,6 @@ impl PrivateKey {
 
     fn sign_bytes(&self, msg: &[u8]) -> Vec<u8> {
         self.keypair.sign(msg).expect("Failed to sign bytes")
-    }
-
-}
-
-pub struct Address {
-    address: PeerId,
-}
-
-impl Hashable for Address {
-    fn hash(&self) -> Hash {
-        self.address.to_bytes().hash()
     }
 }
 
@@ -80,6 +78,12 @@ impl<T: Hashable> Contract<T> {
         bytes_to_sign.extend(self.timestamp.to_be_bytes().iter());
 
         self.signee.verify_bytes(&bytes_to_sign, &self.signature)
+    }
+}
+
+impl<T: Hashable> Hashable for Contract<T> {
+    fn hash(&self) -> Hash {
+        hash![self.signee, self.signature, self.timestamp, self.content]
     }
 }
 
