@@ -13,7 +13,6 @@ impl PublicKey {
 }
 
 impl Hashable for PublicKey {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.key.clone().into_protobuf_encoding()).cast()
     }
@@ -71,7 +70,6 @@ impl<T: Hashable> Contract<T> {
 }
 
 impl<T: Hashable> Hashable for Contract<T> {
-    type Input = Self;
     fn hash(&self) -> Hash<Contract<T>> {
         hash![self.signee, self.signature, self.timestamp, self.content]
     }

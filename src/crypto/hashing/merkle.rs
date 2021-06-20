@@ -35,7 +35,6 @@ impl MerkleNode {
 }
 
 impl Hashable for MerkleNode {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         self.value
     }
@@ -170,7 +169,6 @@ fn left_child_size(size: usize) -> usize {
 }
 
 impl Hashable for MerkleTree {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         hash![self.nodes[self.root], self.size]
     }

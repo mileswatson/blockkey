@@ -7,7 +7,6 @@ struct LicenseTemplate {
 }
 
 impl Hashable for LicenseTemplate {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         self.seed.hash().cast()
     }
@@ -18,7 +17,6 @@ struct LicenseCreation {
 }
 
 impl Hashable for LicenseCreation {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         self.template.cast()
     }
@@ -30,7 +28,6 @@ struct LicenseTransfer {
 }
 
 impl Hashable for LicenseTransfer {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         hash![self.license, self.recipient]
     }

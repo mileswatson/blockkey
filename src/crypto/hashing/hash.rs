@@ -44,55 +44,47 @@ impl<T> fmt::Display for Hash<T> {
     }
 }
 
-pub trait Hashable {
-    type Input;
-    fn hash(&self) -> Hash<Self::Input>;
+pub trait Hashable<Input=Self> {
+    fn hash(&self) -> Hash<Input>;
 }
 
-impl<T> Hashable for Hash<T> {
-    type Input = T;
+impl<T> Hashable<T> for Hash<T> {
     fn hash(&self) -> Hash<T> {
         *self
     }
 }
 
 impl Hashable for Vec<u8> {
-    type Input = Self;
-    fn hash(&self) -> Hash<Vec<u8>> {
+    fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self)
     }
 }
 
 impl Hashable for usize {
-    type Input = Self;
-    fn hash(&self) -> Hash<usize> {
+    fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
 impl Hashable for i32 {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
 impl Hashable for u8 {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
 impl Hashable for u64 {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.to_be_bytes()).cast()
     }
 }
 
 impl Hashable for u128 {
-    type Input = Self;
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self.to_be_bytes()).cast()
     }
