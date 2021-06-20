@@ -92,7 +92,7 @@ impl MerkleTree {
     }
 
     /// Generate a proof that the given item is contained within the Merkle tree.
-    pub fn construct_proof(&self, index: usize) -> Vec<Hash<()>> {
+    pub fn construct_proof(&self, index: usize) -> Vec<Hash> {
         if index >= self.size {
             panic!()
         } else {
@@ -123,7 +123,7 @@ impl MerkleTree {
         size: usize,
         leaf: T,
         tree_hash: Hash<MerkleTree>,
-        proof: &[Hash<()>],
+        proof: &[Hash],
     ) -> bool {
         let proof: Vec<Hash<MerkleNode>> = proof.iter().map(|x| x.cast()).collect();
         verify_proof_rec(index, size, leaf.hash().cast(), &proof)

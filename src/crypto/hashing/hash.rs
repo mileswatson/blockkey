@@ -5,7 +5,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Hash<T: ?Sized>([u8; 32], PhantomData<T>);
+pub struct Hash<T: ?Sized = ()>([u8; 32], PhantomData<T>);
 
 impl<T: ?Sized> Clone for Hash<T> {
     fn clone(&self) -> Self {
@@ -15,7 +15,7 @@ impl<T: ?Sized> Clone for Hash<T> {
 
 impl<T: ?Sized> Copy for Hash<T> {}
 
-impl Hash<Vec<u8>> {
+impl Hash {
     pub fn from_bytes(bytes: &[u8]) -> Hash<Vec<u8>> {
         let mut hasher = Sha256::new();
         hasher.update(bytes);
@@ -44,7 +44,7 @@ impl<T> fmt::Display for Hash<T> {
     }
 }
 
-pub trait Hashable<Input=Self> {
+pub trait Hashable<Input = Self> {
     fn hash(&self) -> Hash<Input>;
 }
 
@@ -116,14 +116,14 @@ mod test {
     use crate::crypto::hashing::*;
     #[test]
     fn hash_transparency() {
-        let x: Hash<()> = hash![1, 2, 3];
+        let x: Hash = hash![1, 2, 3];
         assert_eq!(x, hash![1, 2.hash(), 3]);
     }
 
     #[test]
     fn nested_hashing() {
-        let x: Hash<()> = hash![1, 2, 3];
-        let y: Hash<()> = hash![2, 3];
+        let x: Hash = hash![1, 2, 3];
+        let y: Hash = hash![2, 3];
         assert_ne!(x, hash![1, y]);
     }
 }
