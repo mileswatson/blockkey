@@ -1,5 +1,6 @@
-use crate::crypto::hashing::Hashable;
+use crate::crypto::hashing::{Hash, Hashable};
 use libp2p::identity;
+use std::time::SystemTime;
 
 pub struct PublicKey {
     key: identity::PublicKey,
@@ -8,6 +9,12 @@ pub struct PublicKey {
 impl PublicKey {
     fn verify_bytes(&self, msg: &[u8], sig: &[u8]) -> bool {
         self.key.verify(msg, sig)
+    }
+}
+
+impl Hashable for PublicKey {
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(&self.key.clone().into_protobuf_encoding()).cast()
     }
 }
 
@@ -29,9 +36,14 @@ impl PrivateKey {
     }
 
     pub fn sign<T: Hashable>(&self, content: T) -> Contract<T> {
+        let timestamp = SystemTime::now().elapsed().unwrap().as_millis();
+        let mut bytes_to_sign = content.hash().get_bytes().to_vec();
+        bytes_to_sign.extend(timestamp.to_be_bytes().iter());
+
         Contract {
             signee: self.get_public(),
-            signature: self.sign_bytes(content.hash().get_bytes()),
+            signature: self.sign_bytes(&bytes_to_sign),
+            timestamp,
             content,
         }
     }
@@ -44,13 +56,22 @@ impl PrivateKey {
 pub struct Contract<T: Hashable> {
     signee: PublicKey,
     signature: Vec<u8>,
+    timestamp: u128,
     content: T,
 }
 
 impl<T: Hashable> Contract<T> {
     pub fn verify(&self) -> bool {
-        let hash = self.content.hash();
-        self.signee.verify_bytes(hash.get_bytes(), &self.signature)
+        let mut bytes_to_sign = self.content.hash().get_bytes().to_vec();
+        bytes_to_sign.extend(self.timestamp.to_be_bytes().iter());
+
+        self.signee.verify_bytes(&bytes_to_sign, &self.signature)
+    }
+}
+
+impl<T: Hashable> Hashable for Contract<T> {
+    fn hash(&self) -> Hash<Contract<T>> {
+        hash![self.signee, self.signature, self.timestamp, self.content]
     }
 }
 

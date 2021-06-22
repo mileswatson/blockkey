@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Debug)]
 struct MerkleNode {
-    value: Hash,
+    value: Hash<MerkleNode>,
     children: Option<(usize, usize)>,
     size: usize,
 }
@@ -10,7 +10,7 @@ struct MerkleNode {
 impl MerkleNode {
     pub fn new(x: &impl Hashable) -> MerkleNode {
         MerkleNode {
-            value: x.hash(),
+            value: x.hash().cast(),
             children: None,
             size: 1,
         }
@@ -35,7 +35,7 @@ impl MerkleNode {
 }
 
 impl Hashable for MerkleNode {
-    fn hash(&self) -> Hash {
+    fn hash(&self) -> Hash<Self> {
         self.value
     }
 }
@@ -113,7 +113,7 @@ impl MerkleTree {
                     current = children.1;
                 }
             }
-            proof
+            proof.into_iter().map(|x| x.cast()).collect()
         }
     }
 
@@ -122,17 +122,23 @@ impl MerkleTree {
         index: usize,
         size: usize,
         leaf: T,
-        tree_hash: Hash,
+        tree_hash: Hash<MerkleTree>,
         proof: &[Hash],
     ) -> bool {
-        verify_proof_rec(index, size, leaf.hash(), proof)
+        let proof: Vec<Hash<MerkleNode>> = proof.iter().map(|x| x.cast()).collect();
+        verify_proof_rec(index, size, leaf.hash().cast(), &proof)
             .map(|found| hash![found, size] == tree_hash)
             .unwrap_or(false)
     }
 }
 
 /// Underlying function to recursively verify a proof
-fn verify_proof_rec(index: usize, size: usize, leaf: Hash, proof: &[Hash]) -> Option<Hash> {
+fn verify_proof_rec(
+    index: usize,
+    size: usize,
+    leaf: Hash<MerkleNode>,
+    proof: &[Hash<MerkleNode>],
+) -> Option<Hash<MerkleNode>> {
     let left_size = left_child_size(size);
     if size == 1 {
         Some(leaf)
@@ -163,7 +169,7 @@ fn left_child_size(size: usize) -> usize {
 }
 
 impl Hashable for MerkleTree {
-    fn hash(&self) -> Hash {
+    fn hash(&self) -> Hash<Self> {
         hash![self.nodes[self.root], self.size]
     }
 }
