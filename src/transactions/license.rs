@@ -2,12 +2,12 @@ use crate::crypto::contracts::{Contract, UserId};
 use crate::crypto::hashing::*;
 
 pub struct UnsignedLicenseCreation {
-    seed: u64,
+    pub seed: u64,
 }
 
 pub struct UnsignedLicenseTransfer {
-    license: LicenseId,
-    recipient: UserId,
+    pub license: LicenseId,
+    pub recipient: UserId,
 }
 
 pub type LicenseCreation = Contract<UnsignedLicenseCreation>;
