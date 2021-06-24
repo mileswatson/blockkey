@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Hash<T: ?Sized = ()>([u8; 32], PhantomData<T>);
 
 impl<T: ?Sized> Clone for Hash<T> {
@@ -13,7 +13,21 @@ impl<T: ?Sized> Clone for Hash<T> {
     }
 }
 
+impl<T: ?Sized> PartialEq for Hash<T> {
+    fn eq(&self, h: &Self) -> bool {
+        self.0 == h.0
+    }
+}
+
+impl<T: ?Sized> Eq for Hash<T> {}
+
 impl<T: ?Sized> Copy for Hash<T> {}
+
+impl<T: ?Sized> std::hash::Hash for Hash<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 impl Hash {
     pub fn from_bytes(bytes: &[u8]) -> Hash<Vec<u8>> {
@@ -114,6 +128,14 @@ macro_rules! hash {
 #[cfg(test)]
 mod test {
     use crate::crypto::hashing::*;
+
+    #[test]
+    fn equality() {
+        let x: Hash = hash![1, 2, 3];
+        let y: Hash = hash![1, 2, 3];
+        assert_eq!(x == y, true);
+    }
+
     #[test]
     fn hash_transparency() {
         let x: Hash = hash![1, 2, 3];

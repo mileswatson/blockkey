@@ -2,9 +2,12 @@ use crate::crypto::hashing::{Hash, Hashable};
 use libp2p::identity;
 use std::time::SystemTime;
 
+#[derive(PartialEq, Eq)]
 pub struct PublicKey {
     key: identity::PublicKey,
 }
+
+pub type UserId = Hash<PublicKey>;
 
 impl PublicKey {
     fn verify_bytes(&self, msg: &[u8], sig: &[u8]) -> bool {
@@ -54,7 +57,7 @@ impl PrivateKey {
 }
 
 pub struct Contract<T: Hashable> {
-    signee: PublicKey,
+    pub signee: PublicKey,
     signature: Vec<u8>,
     timestamp: u128,
     content: T,
