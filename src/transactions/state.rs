@@ -62,7 +62,7 @@ impl State {
         })
     }
 
-    pub fn create_license(&self, creation: &LicenseCreation) -> Option<State> {
+    fn create_license(&self, creation: &LicenseCreation) -> Option<State> {
         if !creation.verify() {
             None
         } else {
@@ -72,7 +72,7 @@ impl State {
         }
     }
 
-    pub fn transfer_license(&self, transfer: &LicenseTransfer) -> Option<State> {
+    fn transfer_license(&self, transfer: &LicenseTransfer) -> Option<State> {
         if !transfer.verify() {
             None
         } else {
@@ -85,12 +85,12 @@ impl State {
                 })
         }
     }
-}
 
-pub fn apply(state: &State, transaction: &Transaction) -> Option<State> {
-    match transaction {
-        LicenseCreation(creation) => state.create_license(creation),
-        LicenseTransfer(transfer) => state.transfer_license(transfer),
+    pub fn apply(&self, transaction: &Transaction) -> Option<State> {
+        match transaction {
+            LicenseCreation(creation) => self.create_license(creation),
+            LicenseTransfer(transfer) => self.transfer_license(transfer),
+        }
     }
 }
 
