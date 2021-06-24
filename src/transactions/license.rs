@@ -2,32 +2,32 @@ use crate::crypto::contracts::Contract;
 use crate::crypto::contracts::PublicKey;
 use crate::crypto::hashing::*;
 
-struct LicenseTemplate {
+pub struct UnsignedLicenseTemplate {
     seed: u64,
 }
 
-impl Hashable for LicenseTemplate {
+impl Hashable for UnsignedLicenseTemplate {
     fn hash(&self) -> Hash<Self> {
         self.seed.hash().cast()
     }
 }
 
-struct LicenseCreation {
-    template: Hash<Contract<LicenseTemplate>>,
+pub struct UnsignedLicenseCreation {
+    template: Hash<Contract<UnsignedLicenseTemplate>>,
 }
 
-impl Hashable for LicenseCreation {
+impl Hashable for UnsignedLicenseCreation {
     fn hash(&self) -> Hash<Self> {
         self.template.cast()
     }
 }
 
-struct LicenseTransfer {
-    license: Hash<Contract<LicenseCreation>>,
+pub struct UnsignedLicenseTransfer {
+    license: Hash<Contract<UnsignedLicenseCreation>>,
     recipient: Hash<PublicKey>,
 }
 
-impl Hashable for LicenseTransfer {
+impl Hashable for UnsignedLicenseTransfer {
     fn hash(&self) -> Hash<Self> {
         hash![self.license, self.recipient]
     }
