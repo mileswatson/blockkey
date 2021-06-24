@@ -59,8 +59,8 @@ impl PrivateKey {
 pub struct Contract<T: Hashable> {
     pub signee: PublicKey,
     signature: Vec<u8>,
-    timestamp: u128,
-    content: T,
+    pub timestamp: u128,
+    pub content: T,
 }
 
 impl<T: Hashable> Contract<T> {

@@ -1,53 +1,32 @@
 use crate::crypto::contracts::{PublicKey, UserId};
 use crate::crypto::hashing::{Hash, Hashable};
-use crate::transactions::license::{LicenseId, LicenseTemplateId};
-use crate::transactions::LicenseTemplate;
+use crate::transactions::license::{LicenseCreation, LicenseId};
 use crate::transactions::Transaction::{self, *};
 use im_rc::HashMap;
 use im_rc::HashSet;
 
 #[derive(Clone)]
 struct UserState {
-    templates: HashSet<LicenseTemplateId>,
     created: HashSet<LicenseId>,
     licenses: HashSet<LicenseId>,
 }
 
 impl UserState {
-    pub fn new() -> UserState {
+    fn new() -> UserState {
         UserState {
-            templates: HashSet::<LicenseTemplateId>::new(),
             created: HashSet::<LicenseId>::new(),
             licenses: HashSet::<LicenseId>::new(),
         }
     }
 
-    fn update_templates(&self, templates: HashSet<LicenseTemplateId>) -> UserState {
-        UserState {
-            templates,
-            ..self.clone()
-        }
-    }
-
-    fn update_created(&self, created: HashSet<LicenseId>) -> UserState {
-        UserState {
-            created,
-            ..self.clone()
-        }
-    }
-
-    fn update_licenses(&self, licenses: HashSet<LicenseId>) -> UserState {
-        UserState {
-            licenses,
-            ..self.clone()
-        }
-    }
-
-    pub fn create_template(&self, template_id: LicenseTemplateId) -> Option<UserState> {
-        if self.templates.contains(&template_id) {
+    fn create_license(&self, license: LicenseId) -> Option<UserState> {
+        if self.created.contains(&license) {
             None
         } else {
-            Some(self.update_templates(self.templates.update(template_id)))
+            Some(UserState {
+                created: self.created.update(license),
+                licenses: self.licenses.update(license),
+            })
         }
     }
 }
@@ -58,26 +37,29 @@ pub struct State {
 }
 
 impl State {
+    fn get_user(&self, user_id: UserId) -> UserState {
+        self.users
+            .get(&user_id)
+            .cloned()
+            .unwrap_or_else(UserState::new)
+    }
+
     fn update_user<F>(&self, user_id: UserId, transform: F) -> Option<State>
     where
         F: Fn(UserState) -> Option<UserState>,
     {
-        let user = self
-            .users
-            .get(&user_id)
-            .cloned()
-            .unwrap_or_else(UserState::new);
+        let user = self.get_user(user_id);
         Some(State {
             users: self.users.update(user_id, transform(user)?),
         })
     }
 
-    pub fn create_template(&self, template: LicenseTemplate) -> Option<State> {
-        if !template.verify() {
+    pub fn create_license(&self, creation: LicenseCreation) -> Option<State> {
+        if !creation.verify() {
             None
         } else {
-            self.update_user(template.signee.hash(), |user| {
-                user.create_template(template.hash())
+            self.update_user(creation.signee.hash(), |user| {
+                user.create_license(creation.hash())
             })
         }
     }
@@ -85,7 +67,7 @@ impl State {
 
 pub fn apply(state: &State, transaction: Transaction) -> Option<State> {
     match transaction {
-        LicenseTemplate(template) => state.create_template(template),
+        LicenseCreation(creation) => state.create_license(creation),
         _ => None,
     }
 }
