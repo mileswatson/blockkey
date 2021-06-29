@@ -1,8 +1,10 @@
 use crate::crypto::contracts::{Contract, UserId};
 use crate::crypto::hashing::*;
+use serde::{Deserialize, Serialize};
 
 pub mod state;
 
+#[derive(Serialize, Deserialize)]
 pub enum Transaction {
     CurrencyTransfer(CurrencyTransfer),
     SelfListing(SelfListing),
@@ -12,31 +14,37 @@ pub enum Transaction {
     LicenseTransfer(LicenseTransfer),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedCurrencyTransfer {
     pub amount: u64,
     pub recipient: UserId,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedSelfListing {
     pub price: u64,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedLicenseOrder {
     pub seller: UserId,
     pub price: u64,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedLicenseListing {
     pub license: LicenseId,
     pub price: u64,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedLicensePurchase {
     pub seller: UserId,
     pub license: LicenseId,
     pub price: u64,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UnsignedLicenseTransfer {
     pub license: LicenseId,
     pub recipient: UserId,

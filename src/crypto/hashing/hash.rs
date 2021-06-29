@@ -1,10 +1,11 @@
 use data_encoding::HEXUPPER;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Hash<T: ?Sized = ()>([u8; 32], PhantomData<T>);
 
 impl<T: ?Sized> Clone for Hash<T> {
