@@ -1,5 +1,8 @@
 use crate::crypto::hashing::{Hash, Hashable};
 use libp2p::identity;
+use serde::de::{self, Deserializer};
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 #[derive(PartialEq, Eq)]
@@ -56,6 +59,7 @@ impl PrivateKey {
     }
 }
 
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub struct Contract<T: Hashable> {
     pub signee: PublicKey,
     signature: Vec<u8>,
@@ -75,6 +79,35 @@ impl<T: Hashable> Contract<T> {
 impl<T: Hashable> Hashable for Contract<T> {
     fn hash(&self) -> Hash<Contract<T>> {
         hash![self.signee, self.signature, self.timestamp, self.content]
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct EncodedPublicKey {
+    data: Vec<u8>,
+}
+
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let encoded_data = self.key.clone().into_protobuf_encoding();
+        let encoded_public_key = EncodedPublicKey { data: encoded_data };
+        encoded_public_key.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let encoded_public_key = EncodedPublicKey::deserialize(deserializer)?;
+        let encoded_data = encoded_public_key.data;
+        let key = identity::PublicKey::from_protobuf_encoding(&encoded_data)
+            .map_err(de::Error::custom)?;
+        Ok(PublicKey { key })
     }
 }
 
@@ -112,5 +145,26 @@ mod tests {
         contract.signee = PrivateKey::generate().get_public();
 
         assert!(!contract.verify());
+    }
+
+    #[test]
+    fn test_serde_public_key() {
+        let original = PrivateKey::generate().get_public();
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: PublicKey = serde_json::from_str(&serialized).unwrap();
+
+        assert!(original == deserialized);
+    }
+
+    #[test]
+    fn test_serde_contract_i32() {
+        let private = PrivateKey::generate();
+        let message: i32 = 123;
+        let original = private.sign(message);
+
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: Contract<i32> = serde_json::from_str(&serialized).unwrap();
+
+        assert!(original == deserialized);
     }
 }
