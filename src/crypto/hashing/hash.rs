@@ -39,7 +39,7 @@ impl Hash {
     }
 }
 
-impl<T> Hash<T> {
+impl<T: ?Sized> Hash<T> {
     pub fn empty() -> Hash<T> {
         Vec::<u8>::new().hash().cast()
     }
@@ -48,22 +48,22 @@ impl<T> Hash<T> {
         &self.0
     }
 
-    pub fn cast<H>(&self) -> Hash<H> {
+    pub fn cast<H: ?Sized>(&self) -> Hash<H> {
         Hash(self.0, PhantomData)
     }
 }
 
-impl<T> fmt::Display for Hash<T> {
+impl<T: ?Sized> fmt::Display for Hash<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", HEXUPPER.encode(&self.0))
     }
 }
 
-pub trait Hashable<Input = Self> {
+pub trait Hashable<Input: ?Sized = Self> {
     fn hash(&self) -> Hash<Input>;
 }
 
-impl<T> Hashable<T> for Hash<T> {
+impl<T: ?Sized> Hashable<T> for Hash<T> {
     fn hash(&self) -> Hash<T> {
         *self
     }
@@ -72,6 +72,12 @@ impl<T> Hashable<T> for Hash<T> {
 impl Hashable for Vec<u8> {
     fn hash(&self) -> Hash<Self> {
         Hash::from_bytes(&self)
+    }
+}
+
+impl Hashable for [u8] {
+    fn hash(&self) -> Hash<Self> {
+        Hash::from_bytes(self).cast()
     }
 }
 

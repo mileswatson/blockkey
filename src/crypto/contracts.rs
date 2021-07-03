@@ -1,43 +1,48 @@
 use crate::crypto::hashing::{Hash, Hashable};
-use libp2p::identity;
-use serde::de::{self, Deserializer};
-use serde::ser::Serializer;
+use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicKey {
-    key: identity::PublicKey,
+    key: ed25519_dalek::PublicKey,
 }
 
 pub type UserId = Hash<PublicKey>;
 
 impl PublicKey {
-    fn verify_bytes(&self, msg: &[u8], sig: &[u8]) -> bool {
-        self.key.verify(msg, sig)
+    fn verify_bytes(&self, msg: &[u8], sig: &Signature) -> bool {
+        self.key.verify(msg, sig).is_ok()
     }
 }
 
 impl Hashable for PublicKey {
     fn hash(&self) -> Hash<Self> {
-        Hash::from_bytes(&self.key.clone().into_protobuf_encoding()).cast()
+        Hash::from_bytes(&self.key.to_bytes()).cast()
+    }
+}
+
+impl Hashable for Signature {
+    fn hash(&self) -> Hash<Signature> {
+        self.to_bytes()[..].hash().cast()
     }
 }
 
 pub struct PrivateKey {
-    keypair: identity::Keypair,
+    keypair: ed25519_dalek::Keypair,
 }
 
 impl PrivateKey {
     pub fn generate() -> Self {
+        let mut csprng = rand::rngs::OsRng;
         PrivateKey {
-            keypair: identity::Keypair::generate_ed25519(),
+            keypair: ed25519_dalek::Keypair::generate(&mut csprng),
         }
     }
 
     pub fn get_public(&self) -> PublicKey {
         PublicKey {
-            key: self.keypair.public(),
+            key: self.keypair.public,
         }
     }
 
@@ -54,15 +59,15 @@ impl PrivateKey {
         }
     }
 
-    fn sign_bytes(&self, msg: &[u8]) -> Vec<u8> {
-        self.keypair.sign(msg).expect("Failed to sign bytes")
+    fn sign_bytes(&self, msg: &[u8]) -> Signature {
+        self.keypair.sign(msg)
     }
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub struct Contract<T: Hashable> {
     pub signee: PublicKey,
-    signature: Vec<u8>,
+    signature: Signature,
     pub timestamp: u128,
     pub content: T,
 }
@@ -79,35 +84,6 @@ impl<T: Hashable> Contract<T> {
 impl<T: Hashable> Hashable for Contract<T> {
     fn hash(&self) -> Hash<Contract<T>> {
         hash![self.signee, self.signature, self.timestamp, self.content]
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct EncodedPublicKey {
-    data: Vec<u8>,
-}
-
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let encoded_data = self.key.clone().into_protobuf_encoding();
-        let encoded_public_key = EncodedPublicKey { data: encoded_data };
-        encoded_public_key.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let encoded_public_key = EncodedPublicKey::deserialize(deserializer)?;
-        let encoded_data = encoded_public_key.data;
-        let key = identity::PublicKey::from_protobuf_encoding(&encoded_data)
-            .map_err(de::Error::custom)?;
-        Ok(PublicKey { key })
     }
 }
 
