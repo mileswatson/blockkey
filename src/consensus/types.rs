@@ -23,7 +23,7 @@ pub struct Vote<T> {
     id: Hash<T>,
 }
 
-pub enum Event<T: Hashable> {
+pub enum Broadcast<T: Hashable> {
     Proposal(Contract<Proposal<T>>),
     Vote(Contract<Vote<T>>),
 }
