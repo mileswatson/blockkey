@@ -111,6 +111,17 @@ impl Hashable for u128 {
     }
 }
 
+impl Hashable for bool {
+    fn hash(&self) -> Hash<Self> {
+        match self {
+            true => 1u8,
+            false => 0u8,
+        }
+        .hash()
+        .cast()
+    }
+}
+
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! hash {
@@ -130,6 +141,15 @@ macro_rules! hash {
             Hash::from_bytes(v.as_slice()).cast()
         }
     );
+}
+
+impl<T: Hashable> Hashable for Option<T> {
+    fn hash(&self) -> Hash<Self> {
+        match self {
+            Some(t) => hash![true, t],
+            None => hash![false, Hash::<T>::empty()],
+        }
+    }
 }
 
 #[cfg(test)]
