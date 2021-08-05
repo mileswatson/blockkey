@@ -56,11 +56,6 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
         self.valid = None;
     }
 
-    pub async fn run(&mut self) {
-        self.reset();
-        self.start_round(0).await;
-    }
-
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
         self.round = round;
         self.step = Step::Propose;
@@ -93,6 +88,12 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
             );
             Ok(())
         }
+    }
+
+    pub async fn run(&mut self) -> Result<(), Error> {
+        self.reset();
+        self.start_round(0).await?;
+        todo!()
     }
 
     async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
