@@ -143,8 +143,8 @@ macro_rules! hash {
     );
 }
 
-impl<T: Hashable> Hashable for Option<T> {
-    fn hash(&self) -> Hash<Self> {
+impl<T: Hashable<I>, I> Hashable<I> for Option<T> {
+    fn hash(&self) -> Hash<I> {
         match self {
             Some(t) => hash![true, t],
             None => hash![false, Hash::<T>::empty()],
