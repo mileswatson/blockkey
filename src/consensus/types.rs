@@ -3,6 +3,7 @@ use crate::crypto::{
     hashing::{Hash, Hashable},
 };
 
+#[derive(PartialEq, Eq)]
 pub enum Step {
     Propose,
     Prevote,
@@ -20,7 +21,18 @@ pub struct Vote<T> {
     step: Step,
     height: u64,
     round: u64,
-    id: Hash<T>,
+    id: Option<Hash<T>>,
+}
+
+impl<T> Vote<T> {
+    pub fn new(step: Step, height: u64, round: u64, id: Option<Hash<T>>) -> Vote<T> {
+        Vote {
+            step,
+            height,
+            round,
+            id,
+        }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]

@@ -1,5 +1,8 @@
 use crate::crypto::hashing::Hashable;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    time::Duration,
+};
 mod app;
 mod timeout;
 mod types;
@@ -7,9 +10,15 @@ mod types;
 pub use app::*;
 pub use types::*;
 
+use timeout::TimeoutManager;
+
 struct Record<B> {
     value: B,
     round: u64,
+}
+
+enum FunctionCall {
+    ProposeTimeout { height: u64, round: u64 },
 }
 
 struct Tendermint<A: App<B>, B: Hashable + Clone> {
@@ -21,6 +30,7 @@ struct Tendermint<A: App<B>, B: Hashable + Clone> {
     app: A,
     incoming: Receiver<Broadcast<B>>,
     outgoing: Sender<Broadcast<B>>,
+    timeouts: TimeoutManager<FunctionCall>,
 }
 
 impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
@@ -34,6 +44,7 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
             app,
             incoming,
             outgoing,
+            timeouts: TimeoutManager::new(),
         }
     }
 
@@ -73,8 +84,25 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
                 .await
                 .map_err(|_| Error::OutgoingClosed)
         } else {
-            // Schedule!
-            Err(Error::NotImplemented)
+            self.timeouts.add(
+                FunctionCall::ProposeTimeout {
+                    height: self.height,
+                    round: self.round,
+                },
+                Duration::from_millis(1000),
+            );
+            Ok(())
         }
+    }
+
+    async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
+        if self.height == height && self.round == round && self.step == Step::Prevote {
+            let vote = Vote::new(Step::Prevote, height, round, None);
+            self.outgoing
+                .send(Broadcast::Vote(self.app.sign(vote)))
+                .await
+                .map_err(|_| Error::OutgoingClosed)?;
+        }
+        Ok(())
     }
 }
