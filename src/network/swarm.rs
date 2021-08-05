@@ -73,7 +73,7 @@ async fn create_transport(
 ) -> Result<transport::Boxed<(PeerId, muxing::StreamMuxerBox)>, Box<dyn Error>> {
     // Create a keypair for authenticated encryption of the transport.
     let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-        .into_authentic(&keys)
+        .into_authentic(keys)
         .expect("Signing libp2p-noise static DH keypair failed.");
 
     // Base tcp transport

@@ -71,7 +71,7 @@ impl<T: ?Sized> Hashable<T> for Hash<T> {
 
 impl Hashable for Vec<u8> {
     fn hash(&self) -> Hash<Self> {
-        Hash::from_bytes(&self)
+        Hash::from_bytes(self)
     }
 }
 
@@ -160,7 +160,7 @@ mod test {
     fn equality() {
         let x: Hash = hash![1, 2, 3];
         let y: Hash = hash![1, 2, 3];
-        assert_eq!(x == y, true);
+        assert_eq!(x, y);
     }
 
     #[test]

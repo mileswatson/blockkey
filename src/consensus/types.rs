@@ -13,7 +13,7 @@ pub struct Proposal<T: Hashable> {
     height: u64,
     round: u64,
     proposal: T,
-    validRound: Option<u64>,
+    valid_round: Option<u64>,
 }
 
 pub struct Vote<T> {
@@ -23,6 +23,7 @@ pub struct Vote<T> {
     id: Hash<T>,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Broadcast<T: Hashable> {
     Proposal(Contract<Proposal<T>>),
     Vote(Contract<Vote<T>>),
@@ -40,7 +41,7 @@ impl Hashable for Step {
 
 impl<T: Hashable> Hashable for Proposal<T> {
     fn hash(&self) -> Hash<Self> {
-        hash![self.height, self.round, self.proposal, self.validRound]
+        hash![self.height, self.round, self.proposal, self.valid_round]
     }
 }
 impl<T> Hashable for Vote<T> {
