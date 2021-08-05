@@ -10,10 +10,10 @@ pub enum Step {
 }
 
 pub struct Proposal<T: Hashable> {
-    height: u64,
-    round: u64,
-    proposal: T,
-    valid_round: Option<u64>,
+    pub height: u64,
+    pub round: u64,
+    pub proposal: T,
+    pub valid_round: Option<u64>,
 }
 
 pub struct Vote<T> {
@@ -24,9 +24,9 @@ pub struct Vote<T> {
 }
 
 #[allow(clippy::large_enum_variant)]
-pub enum Broadcast<T: Hashable> {
-    Proposal(Contract<Proposal<T>>),
-    Vote(Contract<Vote<T>>),
+pub enum Broadcast<B: Hashable> {
+    Proposal(Contract<Proposal<B>>),
+    Vote(Contract<Vote<B>>),
 }
 
 impl Hashable for Step {
@@ -48,4 +48,9 @@ impl<T> Hashable for Vote<T> {
     fn hash(&self) -> Hash<Self> {
         hash![self.step, self.height, self.round, self.id]
     }
+}
+
+pub enum Error {
+    NotImplemented,
+    OutgoingClosed,
 }
