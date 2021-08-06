@@ -6,7 +6,7 @@ use crate::crypto::{
 pub trait App<B: Hashable>: Clone {
     fn id(&self) -> Hash<PublicKey>;
 
-    fn proposer(&self, round: u64) -> Hash<PublicKey>;
+    fn proposer(&self, height: u64, round: u64) -> Hash<PublicKey>;
 
     fn create_block(&self) -> B;
 

@@ -17,28 +17,34 @@ pub struct Proposal<T: Hashable> {
     pub valid_round: Option<u64>,
 }
 
-pub struct Vote<T> {
-    step: Step,
+pub struct Prevote<T> {
     height: u64,
     round: u64,
     id: Option<Hash<T>>,
 }
 
-impl<T> Vote<T> {
-    pub fn new(step: Step, height: u64, round: u64, id: Option<Hash<T>>) -> Vote<T> {
-        Vote {
-            step,
-            height,
-            round,
-            id,
-        }
+impl<T> Prevote<T> {
+    pub fn new(height: u64, round: u64, id: Option<Hash<T>>) -> Prevote<T> {
+        Prevote { height, round, id }
+    }
+}
+pub struct Precommit<T> {
+    height: u64,
+    round: u64,
+    id: Option<Hash<T>>,
+}
+
+impl<T> Precommit<T> {
+    pub fn new(height: u64, round: u64, id: Option<Hash<T>>) -> Precommit<T> {
+        Precommit { height, round, id }
     }
 }
 
 #[allow(clippy::large_enum_variant)]
 pub enum Broadcast<B: Hashable> {
     Proposal(Contract<Proposal<B>>),
-    Vote(Contract<Vote<B>>),
+    Prevote(Contract<Prevote<B>>),
+    Precommit(Contract<Precommit<B>>),
 }
 
 impl Hashable for Step {
@@ -56,13 +62,19 @@ impl<T: Hashable> Hashable for Proposal<T> {
         hash![self.height, self.round, self.proposal, self.valid_round]
     }
 }
-impl<T> Hashable for Vote<T> {
+impl<T> Hashable for Prevote<T> {
     fn hash(&self) -> Hash<Self> {
-        hash![self.step, self.height, self.round, self.id]
+        hash![self.height, self.round, self.id]
+    }
+}
+impl<T> Hashable for Precommit<T> {
+    fn hash(&self) -> Hash<Self> {
+        hash![self.height, self.round, self.id]
     }
 }
 
 pub enum Error {
     NotImplemented,
     OutgoingClosed,
+    IncomingClosed,
 }

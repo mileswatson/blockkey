@@ -59,7 +59,7 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
         self.round = round;
         self.step = Step::Propose;
-        if self.app.proposer(self.round) == self.app.id() {
+        if self.app.proposer(self.height, self.round) == self.app.id() {
             let proposal = match self.valid.as_ref() {
                 Some(record) => Proposal {
                     height: self.height,
@@ -93,14 +93,35 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
     pub async fn run(&mut self) -> Result<(), Error> {
         self.reset();
         self.start_round(0).await?;
-        todo!()
+
+        loop {
+            tokio::select! {
+                function_call = self.timeouts.get_next() => {
+                    match function_call {
+                        FunctionCall::ProposeTimeout {height, round} => self.propose_timeout(height, round).await?,
+                    }
+                }
+                incoming = self.incoming.recv() => {
+                    let broadcast = match incoming {
+                        Some(b) => b,
+                        None => return Err(Error::IncomingClosed),
+                    };
+
+                    // Ensure that any proposal is from the randomly-selected proposer.
+                    if matches!(broadcast, Broadcast::Proposal(contract) if contract.signee.hash() != self.app.proposer(self.height, self.round)) {
+                        continue
+                    }
+                    todo!();
+                }
+            }
+        }
     }
 
     async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
         if self.height == height && self.round == round && self.step == Step::Prevote {
-            let vote = Vote::new(Step::Prevote, height, round, None);
+            let vote = Prevote::new(height, round, None);
             self.outgoing
-                .send(Broadcast::Vote(self.app.sign(vote)))
+                .send(Broadcast::Prevote(self.app.sign(vote)))
                 .await
                 .map_err(|_| Error::OutgoingClosed)?;
         }
