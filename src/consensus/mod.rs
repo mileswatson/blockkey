@@ -142,7 +142,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn line28(&mut self) -> Result<bool, Error> {
-        if self.step == Step::Propose {
+        if self.step != Step::Propose {
             return Ok(false);
         }
 
