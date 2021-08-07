@@ -90,36 +90,57 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         }
     }
 
-    pub async fn handle_broadcast(&mut self, broadcast: Broadcast<B>) -> Result<(), Error> {
-        if let Broadcast::Proposal(contract) = broadcast {
-            // Ensure that any proposal is from the randomly-selected proposer
-            if contract.signee.hash() != self.app.proposer(self.height, self.round) {
-                return Ok(());
-            }
-
-            let Proposal {
-                height,
-                round,
-                proposal: v,
-                valid_round,
-            } = contract.content;
-
-            if (height, round, valid_round) == (self.height, self.round, None) {
-                let vote_id = if self.app.validate_block(&v) && self.locked.is_none()
-                    || self.locked.as_ref().map(|x| x.value == v).unwrap_or(false)
-                {
-                    Some(v.hash())
-                } else {
-                    None
-                };
-
-                let prevote = Prevote::new(self.height, self.round, vote_id);
-                self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
-                    .await?;
-            }
+    async fn line22(&mut self) -> Result<bool, Error> {
+        if self.step != Step::Propose {
+            return Ok(false);
         }
 
-        todo!()
+        let proposer = self.app.proposer(self.height, self.round);
+        let broadcast = self
+            .log
+            .get_current()
+            .proposals
+            .iter()
+            .filter(|contract| {
+                let Proposal {
+                    height,
+                    round,
+                    proposal: _,
+                    valid_round,
+                } = contract.content;
+                (height, round, valid_round) == (self.height, self.round, None)
+            })
+            .find(|contract| contract.signee.hash() == proposer);
+
+        let contract = match broadcast {
+            Some(contract) => contract,
+            None => return Ok(false),
+        };
+
+        let Proposal {
+            height,
+            round,
+            proposal: ref v,
+            valid_round,
+        } = contract.content;
+
+        if (height, round, valid_round) == (self.height, self.round, None) {
+            let vote_id = if self.app.validate_block(v) && self.locked.is_none()
+                || self.locked.as_ref().map(|x| &x.value == v).unwrap_or(false)
+            {
+                Some(v.hash())
+            } else {
+                None
+            };
+
+            let prevote = Prevote::new(self.height, self.round, vote_id);
+            self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
+                .await?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
@@ -133,12 +154,17 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     }
                 }
                 incoming = self.incoming.recv() => {
-                    let broadcast = match incoming {
-                        Some(b) => b,
+                    match incoming {
+                        Some(b) => self.log.add(b),
                         None => return Err(Error::IncomingClosed),
                     };
 
-                    self.handle_broadcast(broadcast).await?
+                    loop {
+                        let changed = [self.line22().await?];
+                        if !changed.iter().any(|x| *x) {
+                            break
+                        }
+                    }
                 }
             }
         }

@@ -6,10 +6,10 @@ use super::{Broadcast, Precommit, Prevote, Proposal};
 
 const LIMIT: u64 = 5;
 
-struct Messages<B: Hashable> {
-    proposals: Vec<Contract<Proposal<B>>>,
-    prevotes: Vec<Contract<Prevote<B>>>,
-    precommits: Vec<Contract<Precommit<B>>>,
+pub struct Messages<B: Hashable> {
+    pub proposals: Vec<Contract<Proposal<B>>>,
+    pub prevotes: Vec<Contract<Prevote<B>>>,
+    pub precommits: Vec<Contract<Precommit<B>>>,
 }
 
 impl<B: Hashable> Messages<B> {
@@ -45,7 +45,7 @@ impl<B: Hashable> MessageLog<B> {
         self.messages.insert(self.height + LIMIT, Messages::new());
     }
 
-    pub fn record(&mut self, broadcast: Broadcast<B>) {
+    pub fn add(&mut self, broadcast: Broadcast<B>) {
         match broadcast {
             Broadcast::Proposal(contract) => {
                 if let Some(m) = self.messages.get_mut(&contract.content.height) {
@@ -63,5 +63,9 @@ impl<B: Hashable> MessageLog<B> {
                 }
             }
         };
+    }
+
+    pub fn get_current(&self) -> &Messages<B> {
+        self.messages.get(&self.height).unwrap()
     }
 }
