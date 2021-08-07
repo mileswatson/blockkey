@@ -18,9 +18,9 @@ pub struct Proposal<T: Hashable> {
 }
 
 pub struct Prevote<T> {
-    height: u64,
-    round: u64,
-    id: Option<Hash<T>>,
+    pub height: u64,
+    pub round: u64,
+    pub id: Option<Hash<T>>,
 }
 
 impl<T> Prevote<T> {
@@ -29,9 +29,9 @@ impl<T> Prevote<T> {
     }
 }
 pub struct Precommit<T> {
-    height: u64,
-    round: u64,
-    id: Option<Hash<T>>,
+    pub height: u64,
+    pub round: u64,
+    pub id: Option<Hash<T>>,
 }
 
 impl<T> Precommit<T> {

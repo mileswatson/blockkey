@@ -4,10 +4,12 @@ use tokio::{
     time::Duration,
 };
 mod app;
+mod log;
 mod timeout;
 mod types;
 
 pub use app::*;
+use log::*;
 pub use types::*;
 
 use timeout::TimeoutManager;
@@ -31,10 +33,15 @@ struct Tendermint<A: App<B>, B: Hashable + Clone> {
     incoming: Receiver<Broadcast<B>>,
     outgoing: Sender<Broadcast<B>>,
     timeouts: TimeoutManager<FunctionCall>,
+    log: MessageLog<B>,
 }
 
 impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
-    pub fn new(app: A, incoming: Receiver<Broadcast<B>>, outgoing: Sender<Broadcast<B>>) -> Self {
+    pub async fn start(
+        app: A,
+        incoming: Receiver<Broadcast<B>>,
+        outgoing: Sender<Broadcast<B>>,
+    ) -> Result<(), Error> {
         Tendermint {
             height: 0,
             round: 0,
@@ -45,15 +52,10 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             incoming,
             outgoing,
             timeouts: TimeoutManager::new(),
+            log: MessageLog::new(),
         }
-    }
-
-    fn reset(&mut self) {
-        self.height = 0;
-        self.round = 0;
-        self.step = Step::Propose;
-        self.locked = None;
-        self.valid = None;
+        .run()
+        .await
     }
 
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
@@ -121,7 +123,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
-        self.reset();
         self.start_round(0).await?;
 
         loop {
