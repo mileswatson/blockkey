@@ -33,7 +33,7 @@ struct Tendermint<A: App<B>, B: Hashable + Clone> {
     timeouts: TimeoutManager<FunctionCall>,
 }
 
-impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
+impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     pub fn new(app: A, incoming: Receiver<Broadcast<B>>, outgoing: Sender<Broadcast<B>>) -> Self {
         Tendermint {
             height: 0,
@@ -74,10 +74,8 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
                     valid_round: None,
                 },
             };
-            self.outgoing
-                .send(Broadcast::Proposal(self.app.sign(proposal)))
+            self.broadcast(Broadcast::Proposal(self.app.sign(proposal)))
                 .await
-                .map_err(|_| Error::OutgoingClosed)
         } else {
             self.timeouts.add(
                 FunctionCall::ProposeTimeout {
@@ -88,6 +86,38 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
             );
             Ok(())
         }
+    }
+
+    pub async fn handle_broadcast(&mut self, broadcast: Broadcast<B>) -> Result<(), Error> {
+        if let Broadcast::Proposal(contract) = broadcast {
+            // Ensure that any proposal is from the randomly-selected proposer
+            if contract.signee.hash() != self.app.proposer(self.height, self.round) {
+                return Ok(());
+            }
+
+            let Proposal {
+                height,
+                round,
+                proposal: v,
+                valid_round,
+            } = contract.content;
+
+            if (height, round, valid_round) == (self.height, self.round, None) {
+                let vote_id = if self.app.validate_block(&v) && self.locked.is_none()
+                    || self.locked.as_ref().map(|x| x.value == v).unwrap_or(false)
+                {
+                    Some(v.hash())
+                } else {
+                    None
+                };
+
+                let prevote = Prevote::new(self.height, self.round, vote_id);
+                self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
+                    .await?;
+            }
+        }
+
+        todo!()
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
@@ -107,11 +137,7 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
                         None => return Err(Error::IncomingClosed),
                     };
 
-                    // Ensure that any proposal is from the randomly-selected proposer.
-                    if matches!(broadcast, Broadcast::Proposal(contract) if contract.signee.hash() != self.app.proposer(self.height, self.round)) {
-                        continue
-                    }
-                    todo!();
+                    self.handle_broadcast(broadcast).await?
                 }
             }
         }
@@ -120,11 +146,16 @@ impl<A: App<B>, B: Hashable + Clone> Tendermint<A, B> {
     async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
         if self.height == height && self.round == round && self.step == Step::Prevote {
             let vote = Prevote::new(height, round, None);
-            self.outgoing
-                .send(Broadcast::Prevote(self.app.sign(vote)))
-                .await
-                .map_err(|_| Error::OutgoingClosed)?;
+            self.broadcast(Broadcast::Prevote(self.app.sign(vote)))
+                .await?
         }
         Ok(())
+    }
+
+    async fn broadcast(&self, msg: Broadcast<B>) -> Result<(), Error> {
+        self.outgoing
+            .send(msg)
+            .await
+            .map_err(|_| Error::OutgoingClosed)
     }
 }
