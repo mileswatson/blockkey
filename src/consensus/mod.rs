@@ -137,6 +137,8 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                 .await?;
 
+            self.step = Step::Prevote;
+
             Ok(true)
         } else {
             Ok(false)
