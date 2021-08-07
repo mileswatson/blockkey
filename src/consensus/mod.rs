@@ -101,18 +101,90 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .get_current()
             .proposals
             .iter()
-            .filter(|contract| {
-                let Proposal {
-                    height,
-                    round,
-                    proposal: _,
-                    valid_round,
-                } = contract.content;
-                (height, round, valid_round) == (self.height, self.round, None)
-            })
-            .find(|contract| contract.signee.hash() == proposer);
+            .filter(|contract| contract.signee.hash() == proposer)
+            .map(|contract| &contract.content)
+            .find(|proposal| {
+                (proposal.height, proposal.round, proposal.valid_round)
+                    == (self.height, self.round, None)
+            });
 
-        let contract = match broadcast {
+        let proposal = match broadcast {
+            Some(contract) => contract,
+            None => return Ok(false),
+        };
+
+        let Proposal {
+            height,
+            round,
+            proposal: v,
+            valid_round,
+        } = proposal;
+
+        if (height, round, valid_round) == (&self.height, &self.round, &None) {
+            let vote_id = if self.app.validate_block(v) && self.locked.is_none()
+                || self.locked.as_ref().map(|x| &x.value == v).unwrap_or(false)
+            {
+                Some(v.hash())
+            } else {
+                None
+            };
+
+            let prevote = Prevote::new(self.height, self.round, vote_id);
+            self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
+                .await?;
+
+            self.step = Step::Prevote;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    async fn line28(&mut self) -> Result<bool, Error> {
+        if self.step == Step::Propose {
+            return Ok(false);
+        }
+
+        let proposer = self.app.proposer(self.height, self.round);
+        let messages = self.log.get_current();
+        let broadcast = messages
+            .proposals
+            .iter()
+            .filter(|contract| contract.signee.hash() == proposer)
+            .map(|contract| &contract.content)
+            .filter(|proposal| {
+                if let Some(vr) = proposal.valid_round {
+                    vr < self.round
+                        && proposal.height == self.height
+                        && proposal.round == self.round
+                } else {
+                    false
+                }
+            })
+            .find(|proposal| {
+                let id = proposal.proposal.hash();
+                let total_weight = messages
+                    .prevotes
+                    .iter()
+                    .map(|contract| {
+                        (
+                            self.app.get_voting_weight(contract.signee.hash()),
+                            &contract.content,
+                        )
+                    })
+                    .filter(|(_, prevote)| {
+                        prevote.height == self.height
+                            && prevote.round == proposal.round
+                            && prevote.id == Some(id)
+                    })
+                    .map(|(weight, _)| weight)
+                    .sum::<u64>();
+
+                total_weight > (self.app.total_voting_weight() + 2) / 3 + 1
+            });
+
+        let proposal = match broadcast {
             Some(contract) => contract,
             None => return Ok(false),
         };
@@ -122,9 +194,9 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             round,
             proposal: ref v,
             valid_round,
-        } = contract.content;
+        } = proposal;
 
-        if (height, round, valid_round) == (self.height, self.round, None) {
+        if (height, round, valid_round) == (&self.height, &self.round, &None) {
             let vote_id = if self.app.validate_block(v) && self.locked.is_none()
                 || self.locked.as_ref().map(|x| &x.value == v).unwrap_or(false)
             {
@@ -162,7 +234,10 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     };
 
                     loop {
-                        let changed = [self.line22().await?];
+                        let changed = [
+                            self.line22().await?,
+                            self.line28().await?
+                        ];
                         if !changed.iter().any(|x| *x) {
                             break
                         }

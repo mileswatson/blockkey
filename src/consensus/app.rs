@@ -6,6 +6,10 @@ use crate::crypto::{
 pub trait App<B: Hashable>: Clone {
     fn id(&self) -> Hash<PublicKey>;
 
+    fn get_voting_weight(&self, id: Hash<PublicKey>) -> u64;
+
+    fn total_voting_weight(&self) -> u64;
+
     fn proposer(&self, height: u64, round: u64) -> Hash<PublicKey>;
 
     fn create_block(&self) -> B;
