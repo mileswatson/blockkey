@@ -23,17 +23,39 @@ enum FunctionCall {
     ProposeTimeout { height: u64, round: u64 },
 }
 
-struct Tendermint<A: App<B>, B: Hashable + Clone> {
-    height: u64,
+struct RoundState {
     round: u64,
     step: Step,
+    line34_executed: bool,
+}
+
+impl RoundState {
+    fn new() -> RoundState {
+        RoundState {
+            round: 0,
+            step: Step::Propose,
+            line34_executed: false,
+        }
+    }
+
+    fn next_round(&mut self) {
+        *self = RoundState {
+            round: self.round + 1,
+            ..RoundState::new()
+        }
+    }
+}
+
+struct Tendermint<A: App<B>, B: Hashable + Clone> {
+    app: A,
+    height: u64,
+    current: RoundState,
     locked: Option<Record<B>>,
     valid: Option<Record<B>>,
-    app: A,
+    log: MessageLog<B>,
     incoming: Receiver<Broadcast<B>>,
     outgoing: Sender<Broadcast<B>>,
     timeouts: TimeoutManager<FunctionCall>,
-    log: MessageLog<B>,
 }
 
 impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
@@ -43,35 +65,33 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         outgoing: Sender<Broadcast<B>>,
     ) -> Result<(), Error> {
         Tendermint {
+            app,
             height: 0,
-            round: 0,
-            step: Step::Propose,
+            current: RoundState::new(),
             locked: None,
             valid: None,
-            app,
+            log: MessageLog::new(),
             incoming,
             outgoing,
             timeouts: TimeoutManager::new(),
-            log: MessageLog::new(),
         }
         .run()
         .await
     }
 
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
-        self.round = round;
-        self.step = Step::Propose;
-        if self.app.proposer(self.height, self.round) == self.app.id() {
+        self.current.next_round();
+        if self.app.proposer(self.height, self.current.round) == self.app.id() {
             let proposal = match self.valid.as_ref() {
                 Some(record) => Proposal {
                     height: self.height,
-                    round: self.round,
+                    round: self.current.round,
                     proposal: record.value.clone(),
                     valid_round: Some(record.round),
                 },
                 None => Proposal {
                     height: self.height,
-                    round: self.round,
+                    round: self.current.round,
                     proposal: self.app.create_block(),
                     valid_round: None,
                 },
@@ -82,7 +102,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             self.timeouts.add(
                 FunctionCall::ProposeTimeout {
                     height: self.height,
-                    round: self.round,
+                    round: self.current.round,
                 },
                 Duration::from_millis(1000),
             );
@@ -91,11 +111,11 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn line22(&mut self) -> Result<bool, Error> {
-        if self.step != Step::Propose {
+        if self.current.step != Step::Propose {
             return Ok(false);
         }
 
-        let proposer = self.app.proposer(self.height, self.round);
+        let proposer = self.app.proposer(self.height, self.current.round);
         let broadcast = self
             .log
             .get_current()
@@ -105,7 +125,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .map(|contract| &contract.content)
             .find(|proposal| {
                 (proposal.height, proposal.round, proposal.valid_round)
-                    == (self.height, self.round, None)
+                    == (self.height, self.current.round, None)
             });
 
         let proposal = match broadcast {
@@ -120,7 +140,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             valid_round,
         } = proposal;
 
-        if (height, round, valid_round) == (&self.height, &self.round, &None) {
+        if (height, round, valid_round) == (&self.height, &self.current.round, &None) {
             let vote_id = if self.app.validate_block(v)
                 && self.locked.as_ref().map(|x| &x.value == v).unwrap_or(true)
             {
@@ -129,11 +149,11 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                 None
             };
 
-            let prevote = Prevote::new(self.height, self.round, vote_id);
+            let prevote = Prevote::new(self.height, self.current.round, vote_id);
             self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                 .await?;
 
-            self.step = Step::Prevote;
+            self.current.step = Step::Prevote;
 
             Ok(true)
         } else {
@@ -142,11 +162,11 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn line28(&mut self) -> Result<bool, Error> {
-        if self.step != Step::Propose {
+        if self.current.step != Step::Propose {
             return Ok(false);
         }
 
-        let proposer = self.app.proposer(self.height, self.round);
+        let proposer = self.app.proposer(self.height, self.current.round);
         let messages = self.log.get_current();
         let broadcast = messages
             .proposals
@@ -155,9 +175,9 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .map(|contract| &contract.content)
             .filter(|proposal| {
                 if let Some(vr) = proposal.valid_round {
-                    vr < self.round
+                    vr < self.current.round
                         && proposal.height == self.height
-                        && proposal.round == self.round
+                        && proposal.round == self.current.round
                 } else {
                     false
                 }
@@ -201,7 +221,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             None => return Ok(false),
         };
 
-        if (height, round) == (&self.height, &self.round) {
+        if (height, round) == (&self.height, &self.current.round) {
             let vote_id = if self.app.validate_block(v)
                 && self
                     .locked
@@ -214,11 +234,11 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                 None
             };
 
-            let prevote = Prevote::new(self.height, self.round, vote_id);
+            let prevote = Prevote::new(self.height, self.current.round, vote_id);
             self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                 .await?;
 
-            self.step = Step::Prevote;
+            self.current.step = Step::Prevote;
 
             Ok(true)
         } else {
@@ -257,7 +277,10 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
-        if self.height == height && self.round == round && self.step == Step::Prevote {
+        if self.height == height
+            && self.current.round == round
+            && self.current.step == Step::Prevote
+        {
             let vote = Prevote::new(height, round, None);
             self.broadcast(Broadcast::Prevote(self.app.sign(vote)))
                 .await?
