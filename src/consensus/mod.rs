@@ -1,4 +1,9 @@
-use crate::crypto::hashing::Hashable;
+use std::collections::HashMap;
+
+use crate::crypto::{
+    contracts::PublicKey,
+    hashing::{Hash, Hashable},
+};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::Duration,
@@ -27,22 +32,33 @@ struct RoundState {
     round: u64,
     step: Step,
     line34_executed: bool,
+    validators: HashMap<Hash<PublicKey>, u64>,
+    one_third: u64,
+    two_thirds: u64,
 }
 
 impl RoundState {
-    fn new() -> RoundState {
+    fn new(validators: HashMap<Hash<PublicKey>, u64>) -> RoundState {
+        let total: u64 = validators.iter().map(|(_, weight)| *weight).sum();
         RoundState {
             round: 0,
             step: Step::Propose,
             line34_executed: false,
+            validators,
+            one_third: (total + 2) / 3,
+            two_thirds: (total * 2 + 2) / 3,
         }
     }
 
     fn next_round(&mut self) {
         *self = RoundState {
             round: self.round + 1,
-            ..RoundState::new()
+            ..RoundState::new(std::mem::take(&mut self.validators))
         }
+    }
+
+    fn voting_weight(&self, id: Hash<PublicKey>) -> u64 {
+        *self.validators.get(&id).unwrap_or(&0)
     }
 }
 
@@ -65,9 +81,9 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         outgoing: Sender<Broadcast<B>>,
     ) -> Result<(), Error> {
         Tendermint {
+            current: RoundState::new(app.get_validators()),
             app,
             height: 0,
-            current: RoundState::new(),
             locked: None,
             valid: None,
             log: MessageLog::new(),
@@ -189,7 +205,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     .iter()
                     .map(|contract| {
                         (
-                            self.app.get_voting_weight(contract.signee.hash()),
+                            self.current.voting_weight(contract.signee.hash()),
                             &contract.content,
                         )
                     })
@@ -201,7 +217,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     .map(|(weight, _)| weight)
                     .sum::<u64>();
 
-                total_weight > (self.app.total_voting_weight() + 2) / 3 + 1
+                total_weight > self.current.two_thirds
             });
 
         let proposal = match broadcast {
