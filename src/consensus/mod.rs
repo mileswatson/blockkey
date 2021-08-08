@@ -38,22 +38,15 @@ struct RoundState {
 }
 
 impl RoundState {
-    fn new(validators: HashMap<Hash<PublicKey>, u64>) -> RoundState {
+    fn new(round: u64, validators: HashMap<Hash<PublicKey>, u64>) -> RoundState {
         let total: u64 = validators.iter().map(|(_, weight)| *weight).sum();
         RoundState {
-            round: 0,
+            round,
             step: Step::Propose,
             line34_executed: false,
             validators,
             one_third: (total + 2) / 3,
             two_thirds: (total * 2 + 2) / 3,
-        }
-    }
-
-    fn next_round(&mut self) {
-        *self = RoundState {
-            round: self.round + 1,
-            ..RoundState::new(std::mem::take(&mut self.validators))
         }
     }
 
@@ -81,7 +74,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         outgoing: Sender<Broadcast<B>>,
     ) -> Result<(), Error> {
         Tendermint {
-            current: RoundState::new(app.get_validators()),
+            current: RoundState::new(0, app.get_validators()),
             app,
             height: 0,
             locked: None,
@@ -96,7 +89,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
-        self.current.next_round();
+        self.current = RoundState::new(round, self.app.get_validators());
         if self.app.proposer(self.height, self.current.round) == self.app.id() {
             let proposal = match self.valid.as_ref() {
                 Some(record) => Proposal {
