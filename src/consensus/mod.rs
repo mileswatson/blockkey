@@ -121,8 +121,8 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         } = proposal;
 
         if (height, round, valid_round) == (&self.height, &self.round, &None) {
-            let vote_id = if self.app.validate_block(v) && self.locked.is_none()
-                || self.locked.as_ref().map(|x| &x.value == v).unwrap_or(false)
+            let vote_id = if self.app.validate_block(v)
+                && self.locked.as_ref().map(|x| &x.value == v).unwrap_or(true)
             {
                 Some(v.hash())
             } else {
@@ -196,9 +196,18 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             valid_round,
         } = proposal;
 
-        if (height, round, valid_round) == (&self.height, &self.round, &None) {
-            let vote_id = if self.app.validate_block(v) && self.locked.is_none()
-                || self.locked.as_ref().map(|x| &x.value == v).unwrap_or(false)
+        let valid_round = match valid_round {
+            Some(x) => x,
+            None => return Ok(false),
+        };
+
+        if (height, round) == (&self.height, &self.round) {
+            let vote_id = if self.app.validate_block(v)
+                && self
+                    .locked
+                    .as_ref()
+                    .map(|x| &x.round <= valid_round || &x.value == v)
+                    .unwrap_or(true)
             {
                 Some(v.hash())
             } else {
