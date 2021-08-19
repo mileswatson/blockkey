@@ -26,6 +26,7 @@ struct Record<B> {
 
 enum FunctionCall {
     ProposeTimeout { height: u64, round: u64 },
+    PrevoteTimeout { height: u64, round: u64 },
 }
 
 struct RoundState {
@@ -45,8 +46,8 @@ impl RoundState {
             step: Step::Propose,
             line34_executed: false,
             validators,
-            one_third: (total + 2) / 3,
-            two_thirds: (total * 2 + 2) / 3,
+            one_third: total / 3,
+            two_thirds: (total / 3) * 2,
         }
     }
 
@@ -120,7 +121,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn line22(&mut self) -> Result<bool, Error> {
-        if self.current.step != Step::Propose {
+        if !self.current.step.is_propose() {
             return Ok(false);
         }
 
@@ -162,7 +163,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                 .await?;
 
-            self.current.step = Step::Prevote;
+            self.current.step = Step::prevote();
 
             Ok(true)
         } else {
@@ -171,7 +172,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn line28(&mut self) -> Result<bool, Error> {
-        if self.current.step != Step::Propose {
+        if !self.current.step.is_propose() {
             return Ok(false);
         }
 
@@ -247,12 +248,53 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                 .await?;
 
-            self.current.step = Step::Prevote;
+            self.current.step = Step::prevote();
 
             Ok(true)
         } else {
             Ok(false)
         }
+    }
+
+    async fn line34(&mut self) -> Result<bool, Error> {
+        if !matches!(
+            self.current.step,
+            Step::Prevote {
+                timeout_scheduled: false
+            }
+        ) {
+            return Ok(false);
+        }
+
+        let messages = self.log.get_current();
+
+        let total: u64 = messages
+            .prevotes
+            .iter()
+            .filter_map(|contract| {
+                let content = &contract.content;
+                if content.height == self.height && content.round == self.current.round {
+                    Some(self.current.voting_weight(contract.signee.hash()))
+                } else {
+                    None
+                }
+            })
+            .sum();
+
+        if total <= self.current.two_thirds {
+            return Ok(false);
+        }
+
+        self.timeouts.add(
+            FunctionCall::PrevoteTimeout {
+                height: self.height,
+                round: self.current.round,
+            },
+            Duration::from_millis(1000),
+        );
+
+        // False, as no state has been modified, therefore no rechecks are needed
+        Ok(false)
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
@@ -263,6 +305,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                 function_call = self.timeouts.get_next() => {
                     match function_call {
                         FunctionCall::ProposeTimeout {height, round} => self.propose_timeout(height, round).await?,
+                        FunctionCall::PrevoteTimeout {height, round} => self.prevote_timeout(height, round).await?,
                     }
                 }
                 incoming = self.incoming.recv() => {
@@ -274,7 +317,8 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     loop {
                         let changed = [
                             self.line22().await?,
-                            self.line28().await?
+                            self.line28().await?,
+                            self.line34().await?
                         ];
                         if !changed.iter().any(|x| *x) {
                             break
@@ -286,12 +330,18 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     }
 
     async fn propose_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
-        if self.height == height
-            && self.current.round == round
-            && self.current.step == Step::Prevote
-        {
+        if self.height == height && self.current.round == round && self.current.step.is_propose() {
             let vote = Prevote::new(height, round, None);
             self.broadcast(Broadcast::Prevote(self.app.sign(vote)))
+                .await?
+        }
+        Ok(())
+    }
+
+    async fn prevote_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
+        if height == self.height && round == self.current.round && self.current.step.is_prevote() {
+            let vote = Precommit::new(height, round, None);
+            self.broadcast(Broadcast::Precommit(self.app.sign(vote)))
                 .await?
         }
         Ok(())

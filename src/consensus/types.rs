@@ -3,11 +3,30 @@ use crate::crypto::{
     hashing::{Hash, Hashable},
 };
 
-#[derive(PartialEq, Eq)]
 pub enum Step {
     Propose,
-    Prevote,
+    Prevote { timeout_scheduled: bool },
     Precommit,
+}
+
+impl Step {
+    pub fn prevote() -> Step {
+        Step::Prevote {
+            timeout_scheduled: false,
+        }
+    }
+
+    pub fn is_propose(&self) -> bool {
+        matches!(self, Self::Propose)
+    }
+
+    pub fn is_prevote(&self) -> bool {
+        matches!(self, Self::Prevote { timeout_scheduled })
+    }
+
+    pub fn is_precommit(&self) -> bool {
+        matches!(self, Self::Precommit)
+    }
 }
 
 pub struct Proposal<T: Hashable> {
@@ -51,7 +70,7 @@ impl Hashable for Step {
     fn hash(&self) -> Hash<Self> {
         hash![match self {
             Step::Propose => 0,
-            Step::Prevote => 1,
+            Step::Prevote { timeout_scheduled } => 1,
             Step::Precommit => 2,
         }]
     }
