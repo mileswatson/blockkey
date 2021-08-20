@@ -9,6 +9,7 @@ use tokio::{
     time::Duration,
 };
 mod app;
+mod events;
 mod log;
 mod timeout;
 mod types;
@@ -32,7 +33,6 @@ enum FunctionCall {
 struct RoundState {
     round: u64,
     step: Step,
-    line34_executed: bool,
     validators: HashMap<Hash<PublicKey>, u64>,
     one_third: u64,
     two_thirds: u64,
@@ -44,7 +44,6 @@ impl RoundState {
         RoundState {
             round,
             step: Step::Propose,
-            line34_executed: false,
             validators,
             one_third: total / 3,
             two_thirds: (total / 3) * 2,
@@ -56,7 +55,7 @@ impl RoundState {
     }
 }
 
-struct Tendermint<A: App<B>, B: Hashable + Clone> {
+pub struct Tendermint<A: App<B>, B: Hashable + Clone> {
     app: A,
     height: u64,
     current: RoundState,
@@ -117,57 +116,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                 Duration::from_millis(1000),
             );
             Ok(())
-        }
-    }
-
-    async fn line22(&mut self) -> Result<bool, Error> {
-        if !self.current.step.is_propose() {
-            return Ok(false);
-        }
-
-        let proposer = self.app.proposer(self.height, self.current.round);
-        let broadcast = self
-            .log
-            .get_current()
-            .proposals
-            .iter()
-            .filter(|contract| contract.signee.hash() == proposer)
-            .map(|contract| &contract.content)
-            .find(|proposal| {
-                (proposal.height, proposal.round, proposal.valid_round)
-                    == (self.height, self.current.round, None)
-            });
-
-        let proposal = match broadcast {
-            Some(contract) => contract,
-            None => return Ok(false),
-        };
-
-        let Proposal {
-            height,
-            round,
-            proposal: v,
-            valid_round,
-        } = proposal;
-
-        if (height, round, valid_round) == (&self.height, &self.current.round, &None) {
-            let vote_id = if self.app.validate_block(v)
-                && self.locked.as_ref().map(|x| &x.value == v).unwrap_or(true)
-            {
-                Some(v.hash())
-            } else {
-                None
-            };
-
-            let prevote = Prevote::new(self.height, self.current.round, vote_id);
-            self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
-                .await?;
-
-            self.current.step = Step::prevote();
-
-            Ok(true)
-        } else {
-            Ok(false)
         }
     }
 
