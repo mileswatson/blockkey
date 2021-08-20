@@ -20,14 +20,12 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     None
                 };
 
-                // <prevote, h_p, round_p, _>
+                // broadcast <prevote, h_p, round_p, _>
                 let prevote = Prevote::new(self.height, self.current.round, vote_id);
-
-                // broadcast
                 self.broadcast(Broadcast::Prevote(self.app.sign(prevote)))
                     .await?;
 
-                // step <- prevote
+                // step_p <- prevote
                 self.current.step = Step::prevote();
 
                 Ok(true)
