@@ -117,47 +117,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
         }
     }
 
-    async fn line34(&mut self) -> Result<bool, Error> {
-        if !matches!(
-            self.current.step,
-            Step::Prevote {
-                timeout_scheduled: false
-            }
-        ) {
-            return Ok(false);
-        }
-
-        let messages = self.log.get_current();
-
-        let total: u64 = messages
-            .prevotes
-            .iter()
-            .filter_map(|contract| {
-                let content = &contract.content;
-                if content.height == self.height && content.round == self.current.round {
-                    Some(self.current.voting_weight(contract.signee.hash()))
-                } else {
-                    None
-                }
-            })
-            .sum();
-
-        if total <= 2 * self.current.voting_third {
-            return Ok(false);
-        }
-
-        self.timeouts.add(
-            FunctionCall::PrevoteTimeout {
-                height: self.height,
-                round: self.current.round,
-            },
-            Duration::from_millis(1000),
-        );
-
-        // False, as no state has been modified, therefore no rechecks are needed
-        Ok(false)
-    }
-
     pub async fn run(&mut self) -> Result<(), Error> {
         self.start_round(0).await?;
 
@@ -179,7 +138,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                         let changed = [
                             self.line22().await?,
                             self.line28().await?,
-                            self.line34().await?
+                            self.line34()?
                         ];
                         if !changed.iter().any(|x| *x) {
                             break

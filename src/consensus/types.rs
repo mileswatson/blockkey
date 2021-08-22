@@ -21,7 +21,7 @@ impl Step {
     }
 
     pub fn is_prevote(&self) -> bool {
-        matches!(self, Self::Prevote { timeout_scheduled })
+        matches!(self, Self::Prevote { .. })
     }
 
     pub fn is_precommit(&self) -> bool {
@@ -70,7 +70,7 @@ impl Hashable for Step {
     fn hash(&self) -> Hash<Self> {
         hash![match self {
             Step::Propose => 0,
-            Step::Prevote { timeout_scheduled } => 1,
+            Step::Prevote { .. } => 1,
             Step::Precommit => 2,
         }]
     }
