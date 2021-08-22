@@ -86,7 +86,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     })
                     .map(|(weight, _)| weight)
                     .sum::<u64>();
-                total_weight > self.current.two_thirds
+                total_weight > 2 * self.current.voting_third
             })
     }
 }
