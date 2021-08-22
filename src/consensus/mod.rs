@@ -34,8 +34,7 @@ struct RoundState {
     round: u64,
     step: Step,
     validators: HashMap<Hash<PublicKey>, u64>,
-    one_third: u64,
-    two_thirds: u64,
+    voting_third: u64,
 }
 
 impl RoundState {
@@ -45,8 +44,7 @@ impl RoundState {
             round,
             step: Step::Propose,
             validators,
-            one_third: total / 3,
-            two_thirds: (total / 3) * 2,
+            voting_third: (total + 2) / 3,
         }
     }
 
@@ -144,7 +142,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             })
             .sum();
 
-        if total <= self.current.two_thirds {
+        if total <= 2 * self.current.voting_third {
             return Ok(false);
         }
 
