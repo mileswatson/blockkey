@@ -25,9 +25,10 @@ struct Record<B> {
     round: u64,
 }
 
-enum FunctionCall {
-    ProposeTimeout { height: u64, round: u64 },
-    PrevoteTimeout { height: u64, round: u64 },
+enum Timeouts {
+    Propose { height: u64, round: u64 },
+    Prevote { height: u64, round: u64 },
+    Precommit { height: u64, round: u64 },
 }
 
 struct RoundState {
@@ -35,6 +36,7 @@ struct RoundState {
     step: Step,
     validators: HashMap<Hash<PublicKey>, u64>,
     voting_third: u64,
+    precommit_timeout_scheduled: bool,
 }
 
 impl RoundState {
@@ -45,6 +47,7 @@ impl RoundState {
             step: Step::Propose,
             validators,
             voting_third: (total + 2) / 3,
+            precommit_timeout_scheduled: false,
         }
     }
 
@@ -62,7 +65,7 @@ pub struct Tendermint<A: App<B>, B: Hashable + Clone> {
     log: MessageLog<B>,
     incoming: Receiver<Broadcast<B>>,
     outgoing: Sender<Broadcast<B>>,
-    timeouts: TimeoutManager<FunctionCall>,
+    timeouts: TimeoutManager<Timeouts>,
 }
 
 impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
@@ -107,7 +110,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                 .await
         } else {
             self.timeouts.add(
-                FunctionCall::ProposeTimeout {
+                Timeouts::Propose {
                     height: self.height,
                     round: self.current.round,
                 },
@@ -124,8 +127,9 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             tokio::select! {
                 function_call = self.timeouts.get_next() => {
                     match function_call {
-                        FunctionCall::ProposeTimeout {height, round} => self.propose_timeout(height, round).await?,
-                        FunctionCall::PrevoteTimeout {height, round} => self.prevote_timeout(height, round).await?,
+                        Timeouts::Propose {height, round} => self.propose_timeout(height, round).await?,
+                        Timeouts::Prevote {height, round} => self.prevote_timeout(height, round).await?,
+                        Timeouts::Precommit {height, round} => self.precommit_timeout(height, round).await?,
                     }
                 }
                 incoming = self.incoming.recv() => {
@@ -141,6 +145,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                             self.line34()?,
                             self.line36().await?,
                             self.line44().await?,
+                            self.line47()?,
                         ];
                         if !changed.iter().any(|x| *x) {
                             break
@@ -165,6 +170,13 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             let vote = Precommit::new(height, round, None);
             self.broadcast(Broadcast::Precommit(self.app.sign(vote)))
                 .await?
+        }
+        Ok(())
+    }
+
+    async fn precommit_timeout(&mut self, height: u64, round: u64) -> Result<(), Error> {
+        if height == self.height && round == self.current.round {
+            self.start_round(self.current.round + 1).await?
         }
         Ok(())
     }
