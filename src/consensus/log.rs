@@ -6,6 +6,12 @@ use super::{Broadcast, Precommit, Prevote, Proposal};
 
 const LIMIT: u64 = 5;
 
+pub enum Message<'a, B: Hashable> {
+    Proposal(&'a Contract<Proposal<B>>),
+    Prevote(&'a Contract<Prevote<B>>),
+    Precommit(&'a Contract<Precommit<B>>),
+}
+
 pub struct Messages<B: Hashable> {
     pub proposals: Vec<Contract<Proposal<B>>>,
     pub prevotes: Vec<Contract<Prevote<B>>>,
@@ -19,6 +25,14 @@ impl<B: Hashable> Messages<B> {
             prevotes: Vec::new(),
             precommits: Vec::new(),
         }
+    }
+
+    pub fn all(&self) -> impl Iterator<Item = Message<B>> {
+        let proposals = self.proposals.iter().map(|x| Message::Proposal(x));
+        let prevotes = self.prevotes.iter().map(|x| Message::Prevote(x));
+        let precommits = self.precommits.iter().map(|x| Message::Precommit(x));
+
+        proposals.chain(prevotes).chain(precommits)
     }
 }
 
