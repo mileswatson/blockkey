@@ -146,6 +146,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                             self.line36().await?,
                             self.line44().await?,
                             self.line47()?,
+                            self.line49().await?,
                         ];
                         if !changed.iter().any(|x| *x) {
                             break

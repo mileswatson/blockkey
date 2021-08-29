@@ -5,9 +5,8 @@ use crate::{
 
 impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     pub async fn line36(&mut self) -> Result<bool, Error> {
-        match self.line36_check() {
+        match self.line36_check().cloned() {
             Some(b) => {
-                let b = b.clone();
                 if self.current.step.is_prevote() {
                     self.locked = Some(Record {
                         round: self.current.round,
