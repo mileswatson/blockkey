@@ -42,7 +42,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .filter_map(|contract| {
                 let content = &contract.content;
                 if content.height == self.height && content.round == self.current.round {
-                    Some(self.current.voting_weight(contract.signee.hash()))
+                    Some(self.voting_weight(contract.signee.hash()))
                 } else {
                     None
                 }
@@ -50,6 +50,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .sum();
 
         // 2f+1
-        total > 2 * self.current.voting_third
+        total > self.two_f()
     }
 }

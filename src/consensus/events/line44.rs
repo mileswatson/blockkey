@@ -38,7 +38,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     && content.round == self.current.round
                     && content.id == None
                 {
-                    Some(self.current.voting_weight(contract.signee.hash()))
+                    Some(self.voting_weight(contract.signee.hash()))
                 } else {
                     None
                 }
@@ -46,6 +46,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .sum();
 
         // 2f+1
-        total > 2 * self.current.voting_third
+        total > self.two_f()
     }
 }

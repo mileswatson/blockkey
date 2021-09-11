@@ -7,16 +7,9 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
     pub async fn line49(&mut self) -> Result<bool, Error> {
         match self.line49_check().cloned() {
             Some(b) => {
-                // decision_p[h_p] = v
-                self.app.commit(b);
                 // h_p <- h_p + 1
-                self.height += 1;
-                // Also resets locked, valid, and empties message log.
-                self.locked = None;
-                self.valid = None;
-                self.log.increment_height();
-                // StartRound(0)
-                self.start_round(0).await?;
+                self.new_height(self.height + 1, Some(b)).await?;
+
                 Ok(true)
             }
             None => Ok(false),
@@ -51,7 +44,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     .iter()
                     .map(|contract| {
                         (
-                            self.current.voting_weight(contract.signee.hash()),
+                            self.voting_weight(contract.signee.hash()),
                             &contract.content,
                         )
                     })
@@ -63,7 +56,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     })
                     .map(|(weight, _)| weight)
                     .sum::<u64>();
-                total_weight > 2 * self.current.voting_third
+                total_weight > self.two_f()
             })
             .map(|(_, v)| v)
     }

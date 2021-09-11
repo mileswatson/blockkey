@@ -74,7 +74,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     .iter()
                     .map(|contract| {
                         (
-                            self.current.voting_weight(contract.signee.hash()),
+                            self.voting_weight(contract.signee.hash()),
                             &contract.content,
                         )
                     })
@@ -86,7 +86,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     })
                     .map(|(weight, _)| weight)
                     .sum::<u64>();
-                total_weight > 2 * self.current.voting_third
+                total_weight > self.two_f()
             })
     }
 }

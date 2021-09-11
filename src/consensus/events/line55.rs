@@ -38,12 +38,12 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                         .into_iter()
                         .map(|(_, signee)| signee)
                         .dedup()
-                        .map(|signee| self.current.voting_weight(signee))
+                        .map(|signee| self.voting_weight(signee))
                         .sum::<u64>(),
                 )
             })
             // upon f+1
-            .find(|(_, total)| total > &self.current.voting_third)
+            .find(|(_, total)| *total > self.f())
             .map(|(round, _)| round)
     }
 }

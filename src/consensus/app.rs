@@ -8,7 +8,9 @@ use crate::crypto::{
 pub trait App<B: Hashable>: Clone {
     fn id(&self) -> Hash<PublicKey>;
 
-    fn get_validators(&self) -> HashMap<Hash<PublicKey>, u64>;
+    fn validators(&self) -> HashMap<Hash<PublicKey>, u64>;
+
+    fn total_votes(&self) -> u64;
 
     fn proposer(&self, round: u64) -> Hash<PublicKey>;
 
