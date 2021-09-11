@@ -91,7 +91,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
 
     async fn start_round(&mut self, round: u64) -> Result<(), Error> {
         self.current = RoundState::new(round, self.app.get_validators());
-        if self.app.proposer(self.height, self.current.round) == self.app.id() {
+        if self.app.proposer(self.current.round) == self.app.id() {
             let proposal = match self.valid.as_ref() {
                 Some(record) => Proposal {
                     height: self.height,

@@ -40,7 +40,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             return None;
         }
 
-        let proposer = self.app.proposer(self.height, self.current.round);
+        let proposer = self.app.proposer(self.current.round);
         self.log
             .get_current()
             // Upon <proposal, ...>

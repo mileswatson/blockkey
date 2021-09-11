@@ -32,9 +32,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
             .proposals
             .iter()
             // from proposer(h_p, r)
-            .filter(|contract| {
-                contract.signee.hash() == self.app.proposer(self.height, contract.content.round)
-            })
+            .filter(|contract| contract.signee.hash() == self.app.proposer(contract.content.round))
             .map(|contract| &contract.content)
             .filter_map(|proposal| {
                 // upon <_, h_p, _, v, *>
