@@ -71,7 +71,7 @@ impl<T: ?Sized> Hashable<T> for Hash<T> {
 
 impl Hashable for Vec<u8> {
     fn hash(&self) -> Hash<Self> {
-        Hash::from_bytes(&self)
+        Hash::from_bytes(self)
     }
 }
 
@@ -111,6 +111,17 @@ impl Hashable for u128 {
     }
 }
 
+impl Hashable for bool {
+    fn hash(&self) -> Hash<Self> {
+        match self {
+            true => 1u8,
+            false => 0u8,
+        }
+        .hash()
+        .cast()
+    }
+}
+
 #[allow(unused_macros)]
 #[macro_export]
 macro_rules! hash {
@@ -132,6 +143,15 @@ macro_rules! hash {
     );
 }
 
+impl<T: Hashable<I>, I> Hashable<I> for Option<T> {
+    fn hash(&self) -> Hash<I> {
+        match self {
+            Some(t) => hash![true, t],
+            None => hash![false, Hash::<T>::empty()],
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::crypto::hashing::*;
@@ -140,7 +160,7 @@ mod test {
     fn equality() {
         let x: Hash = hash![1, 2, 3];
         let y: Hash = hash![1, 2, 3];
-        assert_eq!(x == y, true);
+        assert_eq!(x, y);
     }
 
     #[test]
