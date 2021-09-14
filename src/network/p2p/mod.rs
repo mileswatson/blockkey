@@ -1,10 +1,7 @@
 mod swarm;
 
 use async_trait::async_trait;
-use libp2p::{
-    gossipsub::IdentTopic as GossipTopic, gossipsub::MessageId, swarm::SwarmEvent, Multiaddr,
-    PeerId, Swarm,
-};
+use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Multiaddr, Swarm};
 use serde::{de::DeserializeOwned, Serialize};
 use std::error::Error;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -12,13 +9,6 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use swarm::InternalEvent;
 
 use super::{Network, Node};
-
-#[derive(Debug)]
-pub struct Message {
-    pub peer: PeerId,
-    pub id: MessageId,
-    pub data: Vec<u8>,
-}
 
 pub struct P2PNetwork {}
 
