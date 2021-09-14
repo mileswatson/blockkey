@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1.51"
 data-encoding = "2.3.2"
 ed25519-dalek = { version = "1", features = [ "serde" ] }
 futures = "0.3.15"
