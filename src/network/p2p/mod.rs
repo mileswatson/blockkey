@@ -12,14 +12,14 @@ use super::{Network, Node};
 
 pub struct P2PNetwork {}
 
-#[async_trait(?Send)]
-impl<M: 'static + Serialize + DeserializeOwned> Network<M> for P2PNetwork {
+#[async_trait]
+impl<M: 'static + Serialize + DeserializeOwned> Network<M, P2PNode> for P2PNetwork {
     fn new() -> Self {
         P2PNetwork {}
     }
 
-    async fn create_node(&mut self) -> Result<Box<dyn Node<M>>, Box<dyn Error>> {
-        Ok(Box::new(P2PNode::new("blockkey").await?))
+    async fn create_node(&mut self) -> Result<P2PNode, Box<dyn Error>> {
+        Ok(P2PNode::new("blockkey").await?)
     }
 }
 
@@ -50,8 +50,8 @@ impl P2PNode {
     }
 }
 
-#[async_trait(?Send)]
-impl<M: 'static + Serialize + DeserializeOwned> Node<M> for P2PNode {
+#[async_trait]
+impl<M: 'static + Serialize + DeserializeOwned + Send> Node<M> for P2PNode {
     async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Result<(), ()> {
         loop {
             tokio::select! {

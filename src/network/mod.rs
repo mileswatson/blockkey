@@ -6,13 +6,13 @@ use std::error::Error;
 use async_trait::async_trait;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
-#[async_trait(?Send)]
-pub trait Network<M> {
+#[async_trait]
+pub trait Network<M, N> {
     fn new() -> Self;
-    async fn create_node(&mut self) -> Result<Box<dyn Node<M>>, Box<dyn Error>>;
+    async fn create_node(&mut self) -> Result<N, Box<dyn Error>>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait Node<M> {
     async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Result<(), ()>;
 }

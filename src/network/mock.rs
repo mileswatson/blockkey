@@ -1,28 +1,27 @@
 use std::error::Error;
 
-use async_channel::{unbounded, Receiver, Sender};
 use async_trait::async_trait;
+use tokio::sync::broadcast::{channel, Receiver, Sender};
 use tokio::sync::mpsc;
 
 use super::{Network, Node};
 
 pub struct MockNetwork<M> {
     sender: Sender<M>,
-    receiver: Receiver<M>,
 }
 
-#[async_trait(?Send)]
-impl<M: 'static> Network<M> for MockNetwork<M> {
+#[async_trait]
+impl<M: Clone + Send> Network<M, MockNode<M>> for MockNetwork<M> {
     fn new() -> Self {
-        let (sender, receiver) = unbounded();
-        MockNetwork { sender, receiver }
+        let (sender, _) = channel(100);
+        MockNetwork { sender }
     }
 
-    async fn create_node(&mut self) -> Result<Box<dyn Node<M>>, Box<dyn Error>> {
-        Ok(Box::new(MockNode {
+    async fn create_node(&mut self) -> Result<MockNode<M>, Box<dyn Error>> {
+        Ok(MockNode {
             sender: self.sender.clone(),
-            receiver: self.receiver.clone(),
-        }))
+            receiver: self.sender.subscribe(),
+        })
     }
 }
 
@@ -31,8 +30,8 @@ pub struct MockNode<M> {
     receiver: Receiver<M>,
 }
 
-#[async_trait(?Send)]
-impl<M> Node<M> for MockNode<M> {
+#[async_trait]
+impl<M: Clone + Send> Node<M> for MockNode<M> {
     async fn run(
         &mut self,
         incoming: mpsc::Sender<M>,
@@ -43,7 +42,7 @@ impl<M> Node<M> for MockNode<M> {
                 sending = outgoing.recv() => {
                     match sending {
                         None => return Err(()),
-                        Some(block) => self.sender.send(block).await.map_err(|_| {})?
+                        Some(block) => { self.sender.send(block).map_err(|_| {})?; }
                     }
                 }
                 receiving = self.receiver.recv() => {
