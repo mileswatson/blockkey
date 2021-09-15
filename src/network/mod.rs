@@ -14,18 +14,28 @@ pub trait Network<M, N> {
 
 #[async_trait]
 pub trait Node<M> {
-    async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Result<(), ()>;
+    /// Returns true if successful exit, otherwise false.
+    async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Status;
 }
 
-async fn connect<M>(mut app: impl Node<M>, mut network: impl Node<M>) -> Result<(), ()> {
+#[derive(PartialEq, Eq)]
+pub enum Status {
+    Completed,
+    Stopped,
+    Failed,
+}
+
+async fn connect<M>(mut app: impl Node<M>, mut network: impl Node<M>) -> Status {
     let (s1, r1) = channel(10);
     let (s2, r2) = channel(10);
 
-    let (app_res, network_res) = tokio::join!(app.run(s1, r2), network.run(s2, r1));
+    let results = tokio::join!(app.run(s1, r2), network.run(s2, r1));
 
-    if app_res.is_ok() && network_res.is_ok() {
-        Ok(())
-    } else {
-        Err(())
+    use Status::*;
+
+    match results {
+        (Completed, Completed) | (Completed, Stopped) | (Stopped, Completed) => Status::Completed,
+        (Stopped, Stopped) => Stopped,
+        (Failed, _) | (_, Failed) => Failed,
     }
 }

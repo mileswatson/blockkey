@@ -8,7 +8,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use swarm::InternalEvent;
 
-use super::{Network, Node};
+use super::{Network, Node, Status};
 
 pub struct P2PNetwork {}
 
@@ -52,20 +52,23 @@ impl P2PNode {
 
 #[async_trait]
 impl<M: 'static + Serialize + DeserializeOwned + Send> Node<M> for P2PNode {
-    async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Result<(), ()> {
+    async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Status {
         loop {
             tokio::select! {
                 block = outgoing.recv() => {
                     match block {
                         None => {
-                            return Err(())
+                            return Status::Stopped
                         },
                         Some(block) => {
-                            let bytes = serde_json::to_vec(&block).map_err(|_| {})?;
-                            self.swarm
+                            let bytes = match serde_json::to_vec(&block) {
+                                Ok(bytes) => bytes,
+                                Err(_) => return Status::Failed,
+                            };
+                            if self.swarm
                                 .behaviour_mut()
                                 .gossipsub
-                                .publish(self.topic.clone(), bytes).map_err(|_| {})?;
+                                .publish(self.topic.clone(), bytes).is_err() { return Status::Failed }
                         }
                     }
                 }
@@ -76,7 +79,9 @@ impl<M: 'static + Serialize + DeserializeOwned + Send> Node<M> for P2PNode {
                         Behaviour(internal_event) => match internal_event {
                             InternalEvent::Received { message, .. } => {
                                 match serde_json::from_slice(&message.data) {
-                                    Ok(b) => incoming.send(b).await.map_err(|_| {})?,
+                                    Ok(b) => if incoming.send(b).await.is_err() {
+                                        return Status::Stopped
+                                    },
                                     Err(e) => println!("Failed to deserialize! {:?}", e)
                                 }
                             }
