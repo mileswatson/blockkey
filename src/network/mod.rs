@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::error::Error;
 
 #[async_trait]
-pub trait Network<Node: Actor<AppOutput, AppInput>, AppOutput, AppInput = AppOutput> {
+pub trait Network<Node: Actor<NetInput, NetOutput>, NetInput, NetOutput = NetInput> {
     fn new() -> Self;
     async fn create_node(&mut self) -> Result<Node, Box<dyn Error>>;
 }

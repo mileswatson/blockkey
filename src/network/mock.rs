@@ -116,9 +116,6 @@ mod tests {
             }
             v.into_iter().map(|(a, n)| tokio::spawn(connect(a, n)))
         };
-        assert!(join_all(nodes)
-            .await
-            .iter()
-            .all(|x| matches!(x, Ok(Status::Completed))));
+        assert!(join_all(nodes).await.into_iter().all(|x| x.unwrap()));
     }
 }

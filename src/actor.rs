@@ -13,20 +13,16 @@ pub enum Status {
     Failed,
 }
 
-pub async fn connect<AppInput, AppOutput>(
-    mut app: impl Actor<AppInput, AppOutput>,
-    mut network: impl Actor<AppOutput, AppInput>,
-) -> Status {
+pub async fn connect<A, B>(mut actor_1: impl Actor<A, B>, mut actor_2: impl Actor<B, A>) -> bool {
     let (s1, r1) = channel(10);
     let (s2, r2) = channel(10);
 
-    let results = tokio::join!(app.run(r1, s2), network.run(r2, s1));
+    let results = tokio::join!(actor_1.run(r1, s2), actor_2.run(r2, s1));
 
     use Status::*;
 
-    match results {
-        (Completed, Completed) | (Completed, Stopped) | (Stopped, Completed) => Status::Completed,
-        (Stopped, Stopped) => Stopped,
-        (Failed, _) | (_, Failed) => Failed,
-    }
+    matches!(
+        results,
+        (Completed, Completed) | (Completed, Stopped) | (Stopped, Completed)
+    )
 }

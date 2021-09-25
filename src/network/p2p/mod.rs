@@ -56,12 +56,12 @@ impl P2PNode {
 }
 
 #[async_trait]
-impl<AppInput, AppOutput> Actor<AppOutput, AppInput> for P2PNode
+impl<NetOutput, NetInput> Actor<NetInput, NetOutput> for P2PNode
 where
-    AppInput: 'static + DeserializeOwned + Send,
-    AppOutput: 'static + Serialize + Send,
+    NetOutput: 'static + DeserializeOwned + Send,
+    NetInput: 'static + Serialize + Send,
 {
-    async fn run(&mut self, mut input: Receiver<AppOutput>, output: Sender<AppInput>) -> Status {
+    async fn run(&mut self, mut input: Receiver<NetInput>, output: Sender<NetOutput>) -> Status {
         loop {
             tokio::select! {
                 block = input.recv() => {
