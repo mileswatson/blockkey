@@ -332,7 +332,7 @@ dependencies = [
  "im-rc",
  "itertools",
  "libp2p",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde",
  "serde_json",
  "sha2",
