@@ -9,6 +9,11 @@ use async_trait::async_trait;
 use std::error::Error;
 
 #[async_trait]
-pub trait Network<Node: Actor<NetInput, NetOutput>, NetInput, NetOutput = NetInput> {
-    async fn create_node(&mut self) -> Result<Node, Box<dyn Error>>;
+pub trait Node<NetInput, NetOutput = NetInput>: Actor<NetInput, NetOutput> {
+    async fn wait_for_connections(&mut self, num: u32);
+}
+
+#[async_trait]
+pub trait Network<N: Node<NetInput, NetOutput>, NetInput, NetOutput = NetInput> {
+    async fn create_node(&mut self) -> Result<N, Box<dyn Error>>;
 }

@@ -6,10 +6,10 @@ use tokio::sync::mpsc;
 
 use crate::actor::Status;
 
-use super::{Actor, Network};
+use super::{Actor, Network, Node};
 
 pub struct MockNetwork<M> {
-    sender: Sender<M>,
+    sender: Sender<MockMessage<M>>,
 }
 
 impl<M: Clone> MockNetwork<M> {
@@ -20,7 +20,7 @@ impl<M: Clone> MockNetwork<M> {
 }
 
 #[async_trait]
-impl<M: 'static + Clone + Send> Network<MockNode<M>, M> for MockNetwork<M> {
+impl<M: 'static + Clone + Send + std::fmt::Debug> Network<MockNode<M>, M> for MockNetwork<M> {
     async fn create_node(&mut self) -> Result<MockNode<M>, Box<dyn Error>> {
         Ok(MockNode {
             sender: self.sender.clone(),
@@ -29,9 +29,32 @@ impl<M: 'static + Clone + Send> Network<MockNode<M>, M> for MockNetwork<M> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum MockMessage<M> {
+    NewNode,
+    Message(M),
+}
+
 pub struct MockNode<M> {
-    sender: Sender<M>,
-    receiver: Receiver<M>,
+    sender: Sender<MockMessage<M>>,
+    receiver: Receiver<MockMessage<M>>,
+}
+
+#[async_trait]
+impl<M> Node<M> for MockNode<M>
+where
+    M: 'static + Send + Clone + std::fmt::Debug,
+{
+    async fn wait_for_connections(&mut self, num: u32) {
+        self.sender.send(MockMessage::NewNode).unwrap();
+        for _ in 0..num {
+            loop {
+                if let MockMessage::NewNode = self.receiver.recv().await.unwrap() {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -42,7 +65,7 @@ impl<M: 'static + Clone + Send> Actor<M> for MockNode<M> {
                 sending = input.recv() => {
                     match sending {
                         None => return Status::Stopped,
-                        Some(block) => if self.sender.send(block).is_err() {
+                        Some(block) => if self.sender.send(MockMessage::Message(block)).is_err() {
                             return Status::Failed
                         }
                     }
@@ -50,9 +73,10 @@ impl<M: 'static + Clone + Send> Actor<M> for MockNode<M> {
                 receiving = self.receiver.recv() => {
                     match receiving {
                         Err(_) => return Status::Failed,
-                        Ok(block) => if output.send(block).await.is_err() {
+                        Ok(MockMessage::Message(block)) => if output.send(block).await.is_err() {
                             return Status::Stopped
                         }
+                        _ => (),
                     }
                 }
             }

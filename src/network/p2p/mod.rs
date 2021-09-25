@@ -1,6 +1,7 @@
 mod swarm;
 
 use async_trait::async_trait;
+use futures::StreamExt;
 use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Swarm};
 use serde::{de::DeserializeOwned, Serialize};
 use std::error::Error;
@@ -10,7 +11,7 @@ use swarm::InternalEvent;
 
 use crate::actor::Status;
 
-use super::{Actor, Network};
+use super::{Actor, Network, Node};
 
 pub struct P2PNetwork {
     topic: &'static str,
@@ -53,6 +54,24 @@ impl P2PNode {
 }
 
 #[async_trait]
+impl<NetOutput, NetInput> Node<NetInput, NetOutput> for P2PNode
+where
+    NetInput: 'static + Send + Serialize,
+    NetOutput: 'static + Send + DeserializeOwned,
+{
+    async fn wait_for_connections(&mut self, num: u32) {
+        for _ in 0..num - 1 {
+            loop {
+                if let SwarmEvent::ConnectionEstablished { .. } = self.swarm.next().await.unwrap() {
+                    println!("Connection established!");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[async_trait]
 impl<NetOutput, NetInput> Actor<NetInput, NetOutput> for P2PNode
 where
     NetOutput: 'static + DeserializeOwned + Send,
@@ -78,10 +97,11 @@ where
                         }
                     }
                 }
-                event = self.swarm.next_event() => {
+                event = self.swarm.next() => {
+                    let event = event.unwrap();
                     use SwarmEvent::*;
                     match event {
-                        NewListenAddr(addr) => println!("Listening on {}", addr),
+                        NewListenAddr { address, .. } => println!("Listening on {}", address),
                         Behaviour(internal_event) => match internal_event {
                             InternalEvent::Received { message, .. } => {
                                 match serde_json::from_slice(&message.data) {
