@@ -75,7 +75,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl Actor<u32, u32> for MockApp {
+    impl Actor<u32> for MockApp {
         async fn run(
             &mut self,
             mut input: tokio::sync::mpsc::Receiver<u32>,
@@ -114,11 +114,11 @@ mod tests {
                     network.create_node().await.unwrap(),
                 ))
             }
-            v.into_iter().map(|(a, n)| connect(a, n))
+            v.into_iter().map(|(a, n)| tokio::spawn(connect(a, n)))
         };
         assert!(join_all(nodes)
             .await
             .iter()
-            .all(|x| *x == Status::Completed));
+            .all(|x| matches!(x, Ok(Status::Completed))));
     }
 }
