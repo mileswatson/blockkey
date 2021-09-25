@@ -1,7 +1,7 @@
 mod swarm;
 
 use async_trait::async_trait;
-use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Multiaddr, Swarm};
+use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Swarm};
 use serde::{de::DeserializeOwned, Serialize};
 use std::error::Error;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -12,19 +12,23 @@ use crate::actor::Status;
 
 use super::{Actor, Network};
 
-pub struct P2PNetwork {}
+pub struct P2PNetwork {
+    topic: &'static str,
+}
+
+impl P2PNetwork {
+    pub fn new(topic: &'static str) -> Self {
+        P2PNetwork { topic }
+    }
+}
 
 #[async_trait]
 impl<M> Network<P2PNode, M> for P2PNetwork
 where
     M: 'static + Send + Serialize + DeserializeOwned,
 {
-    fn new() -> Self {
-        P2PNetwork {}
-    }
-
     async fn create_node(&mut self) -> Result<P2PNode, Box<dyn Error>> {
-        Ok(P2PNode::new("blockkey").await?)
+        Ok(P2PNode::new(self.topic).await?)
     }
 }
 
@@ -40,13 +44,6 @@ impl P2PNode {
         let topic = GossipTopic::new(topic);
 
         swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
-
-        // Reach out to another node if specified in args
-        if let Some(to_dial) = std::env::args().nth(1) {
-            let addr: Multiaddr = to_dial.parse()?;
-            swarm.dial_addr(addr)?;
-            println!("Dialed {:?}", to_dial)
-        }
 
         // Listen on all interfaces and whatever port the OS assigns
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
@@ -117,5 +114,17 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::P2PNetwork;
+    use crate::network::test::test_network;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    pub async fn test_mock_network() {
+        test_network(P2PNetwork::new("blockkey")).await
     }
 }

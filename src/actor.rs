@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 #[async_trait]
-pub trait Actor<Input, Output = Input> {
+pub trait Actor<Input, Output = Input>: Send + 'static {
     async fn run(&mut self, mut output: Receiver<Input>, input: Sender<Output>) -> Status;
 }
 
