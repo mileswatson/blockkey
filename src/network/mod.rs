@@ -25,7 +25,7 @@ pub enum Status {
     Failed,
 }
 
-async fn connect<M>(mut app: impl Node<M>, mut network: impl Node<M>) -> Status {
+pub async fn connect<M>(mut app: impl Node<M>, mut network: impl Node<M>) -> Status {
     let (s1, r1) = channel(10);
     let (s2, r2) = channel(10);
 

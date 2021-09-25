@@ -18,7 +18,6 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
 
     pub fn line49_check(&self) -> Option<&B> {
         // while decision_p[h_p] = nil is redundant, because if it wasn't nil then h_p would have been incremented
-
         let messages = self.log.get_current();
         messages
             // upon <proposal, _, r, ...>
