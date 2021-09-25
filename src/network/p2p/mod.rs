@@ -8,12 +8,17 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use swarm::InternalEvent;
 
-use super::{Network, Node, Status};
+use crate::actor::Status;
+
+use super::{Actor, Network};
 
 pub struct P2PNetwork {}
 
 #[async_trait]
-impl<M: 'static + Serialize + DeserializeOwned> Network<M, P2PNode> for P2PNetwork {
+impl<M> Network<P2PNode, M> for P2PNetwork
+where
+    M: 'static + Send + Serialize + DeserializeOwned,
+{
     fn new() -> Self {
         P2PNetwork {}
     }
@@ -51,11 +56,15 @@ impl P2PNode {
 }
 
 #[async_trait]
-impl<M: 'static + Serialize + DeserializeOwned + Send> Node<M> for P2PNode {
-    async fn run(&mut self, incoming: Sender<M>, mut outgoing: Receiver<M>) -> Status {
+impl<AppInput, AppOutput> Actor<AppOutput, AppInput> for P2PNode
+where
+    AppInput: 'static + DeserializeOwned + Send,
+    AppOutput: 'static + Serialize + Send,
+{
+    async fn run(&mut self, mut input: Receiver<AppOutput>, output: Sender<AppInput>) -> Status {
         loop {
             tokio::select! {
-                block = outgoing.recv() => {
+                block = input.recv() => {
                     match block {
                         None => {
                             return Status::Stopped
@@ -79,7 +88,7 @@ impl<M: 'static + Serialize + DeserializeOwned + Send> Node<M> for P2PNode {
                         Behaviour(internal_event) => match internal_event {
                             InternalEvent::Received { message, .. } => {
                                 match serde_json::from_slice(&message.data) {
-                                    Ok(b) => if incoming.send(b).await.is_err() {
+                                    Ok(b) => if output.send(b).await.is_err() {
                                         return Status::Stopped
                                     },
                                     Err(e) => println!("Failed to deserialize! {:?}", e)

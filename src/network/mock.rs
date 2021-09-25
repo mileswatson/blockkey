@@ -4,14 +4,16 @@ use async_trait::async_trait;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 use tokio::sync::mpsc;
 
-use super::{Network, Node, Status};
+use crate::actor::Status;
+
+use super::{Actor, Network};
 
 pub struct MockNetwork<M> {
     sender: Sender<M>,
 }
 
 #[async_trait]
-impl<M: Clone + Send> Network<M, MockNode<M>> for MockNetwork<M> {
+impl<M: Clone + Send> Network<MockNode<M>, M> for MockNetwork<M> {
     fn new() -> Self {
         let (sender, _) = channel(100);
         MockNetwork { sender }
@@ -31,11 +33,11 @@ pub struct MockNode<M> {
 }
 
 #[async_trait]
-impl<M: Clone + Send> Node<M> for MockNode<M> {
-    async fn run(&mut self, incoming: mpsc::Sender<M>, mut outgoing: mpsc::Receiver<M>) -> Status {
+impl<M: Clone + Send> Actor<M, M> for MockNode<M> {
+    async fn run(&mut self, mut input: mpsc::Receiver<M>, output: mpsc::Sender<M>) -> Status {
         loop {
             tokio::select! {
-                sending = outgoing.recv() => {
+                sending = input.recv() => {
                     match sending {
                         None => return Status::Stopped,
                         Some(block) => if self.sender.send(block).is_err() {
@@ -46,7 +48,7 @@ impl<M: Clone + Send> Node<M> for MockNode<M> {
                 receiving = self.receiver.recv() => {
                     match receiving {
                         Err(_) => return Status::Failed,
-                        Ok(block) => if incoming.send(block).await.is_err() {
+                        Ok(block) => if output.send(block).await.is_err() {
                             return Status::Stopped
                         }
                     }
@@ -62,7 +64,10 @@ mod tests {
     use futures::future::join_all;
 
     use super::MockNetwork;
-    use crate::network::{connect, Network, Node, Status};
+    use crate::{
+        actor::{connect, Actor, Status},
+        network::Network,
+    };
 
     struct MockApp {
         num: u32,
@@ -70,23 +75,23 @@ mod tests {
     }
 
     #[async_trait]
-    impl Node<u32> for MockApp {
+    impl Actor<u32, u32> for MockApp {
         async fn run(
             &mut self,
-            incoming: tokio::sync::mpsc::Sender<u32>,
-            mut outgoing: tokio::sync::mpsc::Receiver<u32>,
+            mut input: tokio::sync::mpsc::Receiver<u32>,
+            output: tokio::sync::mpsc::Sender<u32>,
         ) -> Status {
-            if self.num == 0 && incoming.send(self.num).await.is_err() {
+            if self.num == 0 && output.send(self.num).await.is_err() {
                 return Status::Stopped;
             }
             loop {
-                match outgoing.recv().await {
+                match input.recv().await {
                     None => return Status::Stopped,
                     Some(block) => {
                         println!("{} received {}", self.num, block);
                         if block == self.complete_on {
                             return Status::Completed;
-                        } else if block == self.num && incoming.send(self.num + 1).await.is_err() {
+                        } else if block == self.num && output.send(self.num + 1).await.is_err() {
                             return Status::Stopped;
                         }
                     }
