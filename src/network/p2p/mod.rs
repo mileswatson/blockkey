@@ -3,6 +3,7 @@ mod swarm;
 use async_trait::async_trait;
 use futures::StreamExt;
 use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Multiaddr, Swarm};
+use rand::random;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{convert::TryInto, error::Error, time::Duration};
 use tokio::{
@@ -17,15 +18,18 @@ use crate::actor::Status;
 use super::{Actor, Network, Node};
 
 pub struct P2PNetwork {
-    topic: &'static str,
+    topic: String,
     nodes: Vec<Multiaddr>,
+    public: bool,
 }
 
 impl P2PNetwork {
-    pub fn new(topic: &'static str) -> Self {
+    /// Generates a random topic if None.
+    pub fn new(topic: Option<String>, public: bool) -> Self {
         P2PNetwork {
-            topic,
+            topic: topic.unwrap_or_else(|| random::<u64>().to_string()),
             nodes: Vec::new(),
+            public,
         }
     }
 }
@@ -36,7 +40,7 @@ where
     M: 'static + Send + Serialize + DeserializeOwned,
 {
     async fn create_node(&mut self) -> Result<P2PNode, Box<dyn Error>> {
-        let mut node = P2PNode::new(self.topic).await?;
+        let mut node = P2PNode::new(self.topic.clone(), self.public).await?;
         let address = node.get_listening_address().await;
         println!("Created node with address {}", address);
         node.dial_addresses(&self.nodes);
@@ -51,15 +55,21 @@ pub struct P2PNode {
 }
 
 impl P2PNode {
-    pub async fn new(topic: &str) -> Result<P2PNode, Box<dyn Error>> {
+    pub async fn new(topic: String, public: bool) -> Result<P2PNode, Box<dyn Error>> {
         let mut swarm = swarm::construct().await?;
 
         let topic = GossipTopic::new(topic);
 
         swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
 
+        let addr = format!(
+            "/ip4/{}/tcp/0",
+            if public { "0.0.0.0" } else { "127.0.0.1" }
+        )
+        .parse()?;
+
         // Listen on all interfaces and whatever port the OS assigns
-        swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
+        swarm.listen_on(addr)?;
 
         Ok(P2PNode { swarm, topic })
     }
@@ -91,10 +101,6 @@ where
                 peer_id, endpoint, ..
             } = self.swarm.next().await.unwrap()
             {
-                /*self.swarm
-                .behaviour_mut()
-                .gossipsub
-                .add_explicit_peer(&peer_id);*/
                 println!(
                     "Established connection with {}@{}",
                     peer_id,
@@ -202,6 +208,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     pub async fn test_p2p_network() {
-        test_network(P2PNetwork::new("blockkey")).await
+        test_network(P2PNetwork::new(None, false)).await
     }
 }
