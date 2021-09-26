@@ -2,10 +2,13 @@ mod swarm;
 
 use async_trait::async_trait;
 use futures::StreamExt;
-use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Swarm};
+use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Multiaddr, Swarm};
 use serde::{de::DeserializeOwned, Serialize};
-use std::error::Error;
-use tokio::sync::mpsc::{Receiver, Sender};
+use std::{convert::TryInto, error::Error, time::Duration};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    time::timeout,
+};
 
 use swarm::InternalEvent;
 
@@ -15,11 +18,15 @@ use super::{Actor, Network, Node};
 
 pub struct P2PNetwork {
     topic: &'static str,
+    nodes: Vec<Multiaddr>,
 }
 
 impl P2PNetwork {
     pub fn new(topic: &'static str) -> Self {
-        P2PNetwork { topic }
+        P2PNetwork {
+            topic,
+            nodes: Vec::new(),
+        }
     }
 }
 
@@ -29,7 +36,12 @@ where
     M: 'static + Send + Serialize + DeserializeOwned,
 {
     async fn create_node(&mut self) -> Result<P2PNode, Box<dyn Error>> {
-        Ok(P2PNode::new(self.topic).await?)
+        let mut node = P2PNode::new(self.topic).await?;
+        let address = node.get_listening_address().await;
+        println!("Created node with address {}", address);
+        node.dial_addresses(&self.nodes);
+        self.nodes.push(address);
+        Ok(node)
     }
 }
 
@@ -47,37 +59,79 @@ impl P2PNode {
         swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
 
         // Listen on all interfaces and whatever port the OS assigns
-        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+        swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
 
         Ok(P2PNode { swarm, topic })
     }
-}
 
-#[async_trait]
-impl<NetOutput, NetInput> Node<NetInput, NetOutput> for P2PNode
-where
-    NetInput: 'static + Send + Serialize,
-    NetOutput: 'static + Send + DeserializeOwned,
-{
-    async fn wait_for_connections(&mut self, num: u32) {
-        for _ in 0..num - 1 {
-            loop {
-                if let SwarmEvent::ConnectionEstablished { .. } = self.swarm.next().await.unwrap() {
-                    println!("Connection established!");
-                    break;
-                }
+    pub async fn get_listening_address(&mut self) -> Multiaddr {
+        loop {
+            if let Some(SwarmEvent::NewListenAddr { address, .. }) = self.swarm.next().await {
+                return address;
             }
         }
+    }
+
+    pub fn dial_addresses(&mut self, addresses: &[Multiaddr]) {
+        addresses
+            .iter()
+            .for_each(|a| self.swarm.dial_addr(a.clone()).unwrap())
     }
 }
 
 #[async_trait]
-impl<NetOutput, NetInput> Actor<NetInput, NetOutput> for P2PNode
+impl<M> Node<M> for P2PNode
 where
-    NetOutput: 'static + DeserializeOwned + Send,
-    NetInput: 'static + Serialize + Send,
+    M: 'static + Send + Serialize + DeserializeOwned,
 {
-    async fn run(&mut self, mut input: Receiver<NetInput>, output: Sender<NetOutput>) -> Status {
+    async fn wait_for_connections(&mut self, num: u32) {
+        println!("Waiting for {} connections", num);
+        loop {
+            if let SwarmEvent::ConnectionEstablished {
+                peer_id, endpoint, ..
+            } = self.swarm.next().await.unwrap()
+            {
+                /*self.swarm
+                .behaviour_mut()
+                .gossipsub
+                .add_explicit_peer(&peer_id);*/
+                println!(
+                    "Established connection with {}@{}",
+                    peer_id,
+                    endpoint.get_remote_address()
+                );
+            }
+            if self
+                .swarm
+                .behaviour()
+                .gossipsub
+                .all_peers()
+                .filter(|(_, v)| v.contains(&&self.topic.hash()))
+                .count()
+                >= num.try_into().unwrap()
+            {
+                break;
+            }
+        }
+
+        println!("Found connections. Waiting...");
+        timeout(Duration::from_secs(1), async {
+            loop {
+                self.swarm.next().await.unwrap();
+            }
+        })
+        .await
+        .unwrap_err();
+        println!("Done waiting.");
+    }
+}
+
+#[async_trait]
+impl<M> Actor<M> for P2PNode
+where
+    M: 'static + Send + Serialize + DeserializeOwned,
+{
+    async fn run(&mut self, mut input: Receiver<M>, output: Sender<M>) -> Status {
         loop {
             tokio::select! {
                 block = input.recv() => {
@@ -94,6 +148,9 @@ where
                                 .behaviour_mut()
                                 .gossipsub
                                 .publish(self.topic.clone(), bytes).is_err() { return Status::Failed }
+                            if output.send(block).await.is_err() {
+                                return Status::Stopped;
+                            }
                         }
                     }
                 }
@@ -144,7 +201,7 @@ mod tests {
     use crate::network::test::test_network;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    pub async fn test_mock_network() {
+    pub async fn test_p2p_network() {
         test_network(P2PNetwork::new("blockkey")).await
     }
 }

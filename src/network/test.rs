@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
-use futures::future::{join_all, select_all};
+use futures::future::join_all;
 
 use crate::{
     actor::{connect, Actor, Status},
@@ -20,8 +22,13 @@ impl Actor<u32> for MockApp {
         mut input: tokio::sync::mpsc::Receiver<u32>,
         output: tokio::sync::mpsc::Sender<u32>,
     ) -> Status {
-        if self.num == 0 && output.send(self.num).await.is_err() {
-            return Status::Stopped;
+        println!("MockApp {} starting!", self.num);
+        if self.num == 0 {
+            if output.send(self.num + 1).await.is_ok() {
+                println!("{} sent {}", self.num, self.num + 1);
+            } else {
+                return Status::Stopped;
+            }
         }
         loop {
             match input.recv().await {
@@ -29,9 +36,14 @@ impl Actor<u32> for MockApp {
                 Some(block) => {
                     println!("{} received {}", self.num, block);
                     if block == self.complete_on {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                         return Status::Completed;
-                    } else if block == self.num && output.send(self.num + 1).await.is_err() {
-                        return Status::Stopped;
+                    } else if block == self.num {
+                        if output.send(self.num + 1).await.is_ok() {
+                            println!("{} sent {}", self.num, self.num + 1);
+                        } else {
+                            return Status::Stopped;
+                        }
                     }
                 }
             }
@@ -40,7 +52,7 @@ impl Actor<u32> for MockApp {
 }
 
 pub async fn test_network<A: Node<u32>>(mut network: impl Network<A, u32>) {
-    const NUM_NODES: u32 = 10;
+    const NUM_NODES: u32 = 5;
     let nodes = {
         let mut v = vec![];
         for num in 0..NUM_NODES {
@@ -52,13 +64,15 @@ pub async fn test_network<A: Node<u32>>(mut network: impl Network<A, u32>) {
                 network.create_node().await.unwrap(),
             ))
         }
-        println!("connecting...");
-        select_all(
+        println!("Connecting...");
+        join_all(
             v.iter_mut()
-                .map(|(_, network)| network.wait_for_connections(5)),
+                .map(|(_, node)| node.wait_for_connections(NUM_NODES - 1)),
         )
         .await;
-        println!("done.");
+        println!("Done connecting.");
+        println!("Waiting...");
+        println!("Done waiting.");
         v.into_iter().map(|(a, n)| tokio::spawn(connect(a, n)))
     };
     assert!(join_all(nodes).await.into_iter().all(|x| x.unwrap()));
