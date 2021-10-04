@@ -2,7 +2,6 @@ use std::error::Error;
 
 use async_trait::async_trait;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
-use tokio::sync::mpsc;
 
 use crate::actor::Status;
 
@@ -20,7 +19,7 @@ impl<M: Clone> MockNetwork<M> {
 }
 
 #[async_trait]
-impl<M: 'static + Clone + Send + std::fmt::Debug> Network<MockNode<M>, M> for MockNetwork<M> {
+impl<M: 'static + Clone + Send + std::fmt::Debug> Network<M, MockNode<M>> for MockNetwork<M> {
     async fn create_node(&mut self) -> Result<MockNode<M>, Box<dyn Error>> {
         Ok(MockNode {
             sender: self.sender.clone(),
@@ -59,13 +58,16 @@ where
 
 #[async_trait]
 impl<M: 'static + Clone + Send> Actor<M> for MockNode<M> {
-    async fn run(&mut self, mut input: mpsc::Receiver<M>, output: mpsc::Sender<M>) -> Status {
+    async fn run(&mut self, mut input: Receiver<M>, output: Sender<M>) -> Status {
         loop {
             tokio::select! {
                 sending = input.recv() => {
                     match sending {
-                        None => return Status::Stopped,
-                        Some(block) => if self.sender.send(MockMessage::Message(block)).is_err() {
+                        Err(e) => {
+                            println!("{:?}", e);
+                            return Status::Stopped
+                        }
+                        Ok(block) => if self.sender.send(MockMessage::Message(block)).is_err() {
                             return Status::Failed
                         }
                     }
@@ -73,7 +75,7 @@ impl<M: 'static + Clone + Send> Actor<M> for MockNode<M> {
                 receiving = self.receiver.recv() => {
                     match receiving {
                         Err(_) => return Status::Failed,
-                        Ok(MockMessage::Message(block)) => if output.send(block).await.is_err() {
+                        Ok(MockMessage::Message(block)) => if output.send(block).is_err() {
                             return Status::Stopped
                         }
                         _ => (),

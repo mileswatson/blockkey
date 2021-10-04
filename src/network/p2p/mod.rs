@@ -7,7 +7,7 @@ use rand::random;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{convert::TryInto, error::Error, time::Duration};
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::broadcast::{Receiver, Sender},
     time::timeout,
 };
 
@@ -35,7 +35,7 @@ impl P2PNetwork {
 }
 
 #[async_trait]
-impl<M> Network<P2PNode, M> for P2PNetwork
+impl<M: Clone + 'static> Network<M, P2PNode> for P2PNetwork
 where
     M: 'static + Send + Serialize + DeserializeOwned,
 {
@@ -90,7 +90,7 @@ impl P2PNode {
 }
 
 #[async_trait]
-impl<M> Node<M> for P2PNode
+impl<M: Clone> Node<M> for P2PNode
 where
     M: 'static + Send + Serialize + DeserializeOwned,
 {
@@ -135,17 +135,18 @@ where
 #[async_trait]
 impl<M> Actor<M> for P2PNode
 where
-    M: 'static + Send + Serialize + DeserializeOwned,
+    M: 'static + Send + Serialize + DeserializeOwned + Clone,
 {
     async fn run(&mut self, mut input: Receiver<M>, output: Sender<M>) -> Status {
         loop {
             tokio::select! {
                 block = input.recv() => {
                     match block {
-                        None => {
+                        Err(e) => {
+                            println!("{:?}", e);
                             return Status::Stopped
                         },
-                        Some(block) => {
+                        Ok(block) => {
                             let bytes = match serde_json::to_vec(&block) {
                                 Ok(bytes) => bytes,
                                 Err(_) => return Status::Failed,
@@ -154,7 +155,7 @@ where
                                 .behaviour_mut()
                                 .gossipsub
                                 .publish(self.topic.clone(), bytes).is_err() { return Status::Failed }
-                            if output.send(block).await.is_err() {
+                            if output.send(block).is_err() {
                                 return Status::Stopped;
                             }
                         }
@@ -168,7 +169,7 @@ where
                         Behaviour(internal_event) => match internal_event {
                             InternalEvent::Received { message, .. } => {
                                 match serde_json::from_slice(&message.data) {
-                                    Ok(b) => if output.send(b).await.is_err() {
+                                    Ok(b) => if output.send(b).is_err() {
                                         return Status::Stopped
                                     },
                                     Err(e) => println!("Failed to deserialize! {:?}", e)
