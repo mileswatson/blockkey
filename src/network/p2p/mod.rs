@@ -5,7 +5,7 @@ use futures::StreamExt;
 use libp2p::{gossipsub::IdentTopic as GossipTopic, swarm::SwarmEvent, Multiaddr, Swarm};
 use rand::random;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{convert::TryInto, error::Error, time::Duration};
+use std::{convert::TryInto, error::Error, fmt::Debug, time::Duration};
 use tokio::{
     sync::broadcast::{Receiver, Sender},
     time::timeout,
@@ -13,7 +13,7 @@ use tokio::{
 
 use swarm::InternalEvent;
 
-use crate::actor::Status;
+use crate::actor::{ActorEvent, Status};
 
 use super::{Actor, Network, Node};
 
@@ -37,7 +37,7 @@ impl P2PNetwork {
 #[async_trait]
 impl<M: Clone + 'static> Network<M, P2PNode> for P2PNetwork
 where
-    M: 'static + Send + Serialize + DeserializeOwned,
+    M: 'static + Send + Serialize + DeserializeOwned + Debug,
 {
     async fn create_node(&mut self) -> Result<P2PNode, Box<dyn Error>> {
         let mut node = P2PNode::new(self.topic.clone(), self.public).await?;
@@ -90,10 +90,7 @@ impl P2PNode {
 }
 
 #[async_trait]
-impl<M: Clone> Node<M> for P2PNode
-where
-    M: 'static + Send + Serialize + DeserializeOwned,
-{
+impl Node for P2PNode {
     async fn wait_for_connections(&mut self, num: u32) {
         println!("Waiting for {} connections", num);
         loop {
@@ -135,30 +132,36 @@ where
 #[async_trait]
 impl<M> Actor<M> for P2PNode
 where
-    M: 'static + Send + Serialize + DeserializeOwned + Clone,
+    M: 'static + Send + Serialize + DeserializeOwned + Clone + Debug,
 {
-    async fn run(&mut self, mut input: Receiver<M>, output: Sender<M>) -> Status {
+    async fn run(
+        &mut self,
+        mut input: Receiver<ActorEvent<M>>,
+        output: Sender<ActorEvent<M>>,
+    ) -> Status {
         loop {
             tokio::select! {
-                block = input.recv() => {
-                    match block {
-                        Err(e) => {
-                            println!("{:?}", e);
-                            return Status::Stopped
-                        },
-                        Ok(block) => {
+                event = input.recv() => {
+                    match event.unwrap() {
+                        ActorEvent::Send(block) => {
                             let bytes = match serde_json::to_vec(&block) {
                                 Ok(bytes) => bytes,
-                                Err(_) => return Status::Failed,
+                                Err(_) => {
+                                    output.send(ActorEvent::Stop).unwrap();
+                                    return Status::Failed
+                                }
                             };
                             if self.swarm
                                 .behaviour_mut()
                                 .gossipsub
-                                .publish(self.topic.clone(), bytes).is_err() { return Status::Failed }
-                            if output.send(block).is_err() {
-                                return Status::Stopped;
-                            }
+                                .publish(self.topic.clone(), bytes).is_err() {
+                                    output.send(ActorEvent::Stop).unwrap();
+                                    return Status::Failed
+                                }
+                            output.send(ActorEvent::Receive(block)).unwrap();
                         }
+                        ActorEvent::Stop => return Status::Stopped,
+                        _ => (),
                     }
                 }
                 event = self.swarm.next() => {
@@ -169,9 +172,7 @@ where
                         Behaviour(internal_event) => match internal_event {
                             InternalEvent::Received { message, .. } => {
                                 match serde_json::from_slice(&message.data) {
-                                    Ok(b) => if output.send(b).is_err() {
-                                        return Status::Stopped
-                                    },
+                                    Ok(b) => { output.send(ActorEvent::Receive(b)).unwrap(); },
                                     Err(e) => println!("Failed to deserialize! {:?}", e)
                                 }
                             }

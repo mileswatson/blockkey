@@ -1,30 +1,33 @@
-use std::error::Error;
+use std::{error::Error, fmt::Debug};
 
 use async_trait::async_trait;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
-use crate::actor::Status;
+use crate::actor::{ActorEvent, Status};
 
 use super::{Actor, Network, Node};
 
 pub struct MockNetwork<M> {
     sender: Sender<MockMessage<M>>,
+    nodes: usize,
 }
 
 impl<M: Clone> MockNetwork<M> {
     fn new() -> Self {
         let (sender, _) = channel(100);
-        MockNetwork { sender }
+        MockNetwork { sender, nodes: 0 }
     }
 }
 
 #[async_trait]
-impl<M: 'static + Clone + Send + std::fmt::Debug> Network<M, MockNode<M>> for MockNetwork<M> {
+impl<M: 'static + Clone + Send + Debug> Network<M, MockNode<M>> for MockNetwork<M> {
     async fn create_node(&mut self) -> Result<MockNode<M>, Box<dyn Error>> {
-        Ok(MockNode {
+        let node = MockNode {
             sender: self.sender.clone(),
             receiver: self.sender.subscribe(),
-        })
+        };
+        self.nodes += 1;
+        Ok(node)
     }
 }
 
@@ -40,13 +43,10 @@ pub struct MockNode<M> {
 }
 
 #[async_trait]
-impl<M> Node<M> for MockNode<M>
-where
-    M: 'static + Send + Clone + std::fmt::Debug,
-{
+impl<M: Clone + Debug + Send> Node for MockNode<M> {
     async fn wait_for_connections(&mut self, num: u32) {
         self.sender.send(MockMessage::NewNode).unwrap();
-        for _ in 0..num {
+        for _ in 0..num + 1 {
             loop {
                 if let MockMessage::NewNode = self.receiver.recv().await.unwrap() {
                     break;
@@ -57,27 +57,35 @@ where
 }
 
 #[async_trait]
-impl<M: 'static + Clone + Send> Actor<M> for MockNode<M> {
-    async fn run(&mut self, mut input: Receiver<M>, output: Sender<M>) -> Status {
+impl<M: 'static + Clone + Send + Debug> Actor<M> for MockNode<M> {
+    async fn run(
+        &mut self,
+        mut input: Receiver<ActorEvent<M>>,
+        output: Sender<ActorEvent<M>>,
+    ) -> Status {
         loop {
             tokio::select! {
-                sending = input.recv() => {
-                    match sending {
-                        Err(e) => {
-                            println!("{:?}", e);
-                            return Status::Stopped
+                event = input.recv() => {
+                    match event.unwrap() {
+                        ActorEvent::Send(block) => {
+                            if self.sender.send(MockMessage::Message(block.clone())).is_err() {
+                                output.send(ActorEvent::Stop).unwrap();
+                                return Status::Failed
+                            }
                         }
-                        Ok(block) => if self.sender.send(MockMessage::Message(block)).is_err() {
-                            return Status::Failed
-                        }
+                        ActorEvent::Stop => return Status::Stopped,
+                        _ => (),
                     }
                 }
                 receiving = self.receiver.recv() => {
                     match receiving {
-                        Err(_) => return Status::Failed,
-                        Ok(MockMessage::Message(block)) => if output.send(block).is_err() {
-                            return Status::Stopped
+                        Err(_) => {
+                            output.send(ActorEvent::Stop).unwrap();
+                            return Status::Failed
                         }
+                        Ok(MockMessage::Message(block)) => {
+                            output.send(ActorEvent::Receive(block)).unwrap();
+                        },
                         _ => (),
                     }
                 }

@@ -145,6 +145,7 @@ impl<A: App<B>, B: Hashable + Clone + Eq> Tendermint<A, B> {
                     };
 
                     loop {
+                        #[allow(clippy::eval_order_dependence)]
                         let changed = [
                             self.line22().await?,
                             self.line28().await?,
